@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "silkworm",
+    "silkworm_syn",
+    "silkworm_rt",
+]

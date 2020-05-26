@@ -1,0 +1,14 @@
+[package]
+name = "silkworm_rt"
+version = "0.1.0-dev.0"
+authors = ["The silkworm developers"]
+edition = "2018"
+description = "(PLACEHOLDER) Runtime for the Yarn interactive dialogue language. Internal dependency of silkworm."
+documentation = "https://docs.rs/crate/silkworm_rt"
+repository = "https://github.com/silkworm-rs/silkworm"
+license = "MIT"
+
+[badges]
+maintenance = { status = "experimental" }
+
+[dependencies]

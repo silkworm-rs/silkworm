@@ -1,0 +1,16 @@
+[package]
+name = "silkworm"
+version = "0.1.0-dev.0"
+authors = ["The silkworm developers"]
+edition = "2018"
+description = "(PLACEHOLDER) An implementation of the Yarn interactive dialogue language in pure Rust."
+documentation = "https://docs.rs/crate/silkworm"
+repository = "https://github.com/silkworm-rs/silkworm"
+license = "MIT"
+readme = "../README.md"
+
+[badges]
+maintenance = { status = "experimental" }
+
+[dependencies]
+silkworm_syn = { version = "0.1.0-dev.0", path = "../silkworm_syn" }
