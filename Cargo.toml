@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "silkworm",
-    "silkworm_syn",
+    "silkworm_err",
     "silkworm_rt",
+    "silkworm_sourcemap",
+    "silkworm_syn",
 ]

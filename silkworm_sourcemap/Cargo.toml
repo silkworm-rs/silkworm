@@ -1,0 +1,14 @@
+[package]
+name = "silkworm_sourcemap"
+version = "0.1.0-dev.0"
+authors = ["The silkworm developers"]
+edition = "2018"
+description = "Source-mapping for silkworm."
+documentation = "https://docs.rs/crate/silkworm_sourcemap"
+repository = "https://github.com/silkworm-rs/silkworm"
+license = "MIT"
+
+[badges]
+maintenance = { status = "experimental" }
+
+[dependencies]

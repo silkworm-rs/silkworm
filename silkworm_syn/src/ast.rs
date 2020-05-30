@@ -1,7 +1,7 @@
 use crate::ptr::P;
-use crate::span::Span;
 use crate::symbol::Symbol;
 use crate::token;
+use crate::Span;
 
 #[derive(Clone, Debug)]
 pub enum Sigil {

@@ -12,6 +12,8 @@ license = "MIT"
 maintenance = { status = "experimental" }
 
 [dependencies]
+silkworm_err = { version = "0.1.0-dev.0", path = "../silkworm_err" }
+silkworm_sourcemap = { version = "0.1.0-dev.0", path = "../silkworm_sourcemap" }
 arrayvec = "0.5.1"
 thiserror = "1.0"
 hashbrown = { version = "0.7", features = ["raw"] }

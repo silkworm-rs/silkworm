@@ -1,4 +1,4 @@
-use super::span::Span;
+use super::Span;
 
 /// Binary operators that can be part of an assignment.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]

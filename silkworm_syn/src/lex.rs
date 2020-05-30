@@ -1,8 +1,8 @@
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
-use crate::span::Span;
 use crate::token::{self, KeywordClass, Token};
+use crate::Span;
 
 mod parse;
 
