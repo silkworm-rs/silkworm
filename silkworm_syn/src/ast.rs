@@ -102,8 +102,20 @@ pub struct Text {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Escape {
-    pub escaped_string: Option<String>,
+    pub kind: EscapeKind,
     pub span: Span,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum EscapeKind {
+    Char(token::EscapeChar),
+    Byte(char),
+
+    /// Unicode escape
+    ///
+    /// The span here is the span of the actual hex code, since it can be variable length
+    /// up to 6 digits.
+    Unicode(char, Span),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

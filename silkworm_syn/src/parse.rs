@@ -4,16 +4,18 @@ use hashbrown::HashSet;
 use silkworm_err::{Error, ErrorBuilder, ErrorCtx};
 
 use crate::ast;
-use crate::lex::LexStream;
+use crate::lex::{self, LexStream};
 use crate::symbol::{Interner, Symbol};
 use crate::token::{Kind as TokenKind, Token};
 use crate::Span;
 
 mod block;
+mod expr;
 mod list;
 mod misc;
 mod node;
 mod pragma;
+mod str;
 
 #[derive(Debug)]
 pub struct ParseCtx<'a> {
@@ -51,7 +53,7 @@ where
         parser
     }
 
-    fn bump(&mut self) {
+    fn bump(&mut self) -> Token {
         if self.token.kind == TokenKind::Eof {
             panic!("bump called after EOF");
         }
@@ -85,6 +87,8 @@ where
         } {}
 
         self.expected_tokens.clear();
+
+        self.last_token
     }
 
     fn is_eof(&self) -> bool {
@@ -289,6 +293,14 @@ where
 
 /// Trait for AST types that can be parsed.
 pub trait Parse: Sized + private::Sealed {
+    /// Default block mode to use when parsing from string sources.
+    #[doc(hidden)]
+    const SOURCE_BLOCK_MODE: lex::BlockMode;
+
+    /// Default inline mode to use when parsing from string sources.
+    #[doc(hidden)]
+    const SOURCE_INLINE_MODE: lex::InlineMode;
+
     /// Parse an AST node with a shared parsing context. Errors are emitted into `ctx`.
     ///
     /// This emits an error if `partial` is `false` and the input is not completely consumed.
@@ -323,6 +335,13 @@ pub trait Parse: Sized + private::Sealed {
         interner: &mut Interner,
     ) -> Result<Self, Vec<Error>> {
         let errors = ErrorCtx::new();
+        let lex_stream = LexStream::with_modes(
+            source,
+            span_base,
+            Self::SOURCE_BLOCK_MODE,
+            Self::SOURCE_INLINE_MODE,
+        );
+
         let ast = Self::partial_parse_with_ctx(
             partial,
             ParseCtx {
@@ -331,7 +350,7 @@ pub trait Parse: Sized + private::Sealed {
                 source,
                 span_base,
             },
-            LexStream::new(source, span_base).filter_map(|result| match result {
+            lex_stream.filter_map(|result| match result {
                 Ok(tok) => Some(tok),
                 Err(err) => {
                     errors.bug(format!("fatal lexer error: {}", err));
@@ -404,12 +423,18 @@ pub trait Parse: Sized + private::Sealed {
 macro_rules! impl_parse {
     {
         $(
-            impl Parse for ast::$ast_type:ident => $parse_method:ident { .. }
+            impl Parse for ast::$ast_type:ident => $parse_method:ident {
+                const SOURCE_BLOCK_MODE: lex::BlockMode = $block_mode:expr;
+                const SOURCE_INLINE_MODE: lex::InlineMode = $inline_mode:expr;
+                [ .. ]
+            }
         )*
     } => {
         $(
             impl private::Sealed for ast::$ast_type {}
             impl Parse for ast::$ast_type {
+                const SOURCE_BLOCK_MODE: lex::BlockMode = $block_mode;
+                const SOURCE_INLINE_MODE: lex::InlineMode = $inline_mode;
                 fn partial_parse_with_ctx<I: IntoIterator<Item = Token>>(
                     partial: bool,
                     ctx: ParseCtx<'_>,
@@ -428,9 +453,36 @@ macro_rules! impl_parse {
 }
 
 impl_parse! {
-    impl Parse for ast::Path => parse_path { .. }
-    impl Parse for ast::Pragma => parse_pragma { .. }
-    impl Parse for ast::Meta => parse_meta { .. }
+    impl Parse for ast::Path => parse_path {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;
+        [ .. ]
+    }
+    impl Parse for ast::Pragma => parse_pragma {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Header;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Meta;
+        [ .. ]
+    }
+    impl Parse for ast::Meta => parse_meta {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Header;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Meta;
+        [ .. ]
+    }
+    impl Parse for ast::StrSegment => parse_str_segment {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::InterpolatedStringLiteral;
+        [ .. ]
+    }
+    impl Parse for ast::Expr => parse_expr {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;
+        [ .. ]
+    }
+    impl Parse for ast::FormatFunc => parse_format_func {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::FormatFunction;
+        [ .. ]
+    }
 }
 
 mod private {

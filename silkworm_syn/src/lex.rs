@@ -10,18 +10,20 @@ use self::parse::parse_token;
 
 const MODE_STACK_CAPACITY: usize = 256;
 
-/// Block-level modes
+/// Block-level modes used to modify lexer behavior.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
-enum BlockMode {
+#[doc(hidden)]
+pub enum BlockMode {
     Header,
     Body,
 }
 
-/// Inline modes
+/// Inline modes used to modify lexer behavior.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 #[repr(u8)]
-enum InlineMode {
+#[doc(hidden)]
+pub enum InlineMode {
     /// After start of line and before any content.
     StartOfLine,
     /// Header key.
@@ -172,8 +174,20 @@ pub struct LexStream<'a> {
 impl<'a> LexStream<'a> {
     /// Creates a new lexing stream.
     pub fn new(src: &'a str, pos: u32) -> Self {
+        Self::with_modes(src, pos, BlockMode::Header, InlineMode::StartOfLine)
+    }
+
+    /// Creates a new lexing stream with given block and inline modes. This can cause
+    /// surprising behavior outside very specific situations. Used for convenience methods
+    /// in `Parse`.
+    pub(crate) fn with_modes(
+        src: &'a str,
+        pos: u32,
+        block_mode: BlockMode,
+        inline_mode: InlineMode,
+    ) -> Self {
         let mut inline_stack = ArrayVec::new();
-        inline_stack.push(InlineMode::StartOfLine);
+        inline_stack.push(inline_mode);
 
         LexStream {
             src,
@@ -182,7 +196,7 @@ impl<'a> LexStream<'a> {
             fatal: false,
             eof_emitted: false,
 
-            block_mode: BlockMode::Header,
+            block_mode,
             inline_stack,
 
             last_indent: 0,

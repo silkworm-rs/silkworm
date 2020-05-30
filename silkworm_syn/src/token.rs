@@ -304,6 +304,16 @@ macro_rules! decl_escape_char {
                     _ => Self::Invalid,
                 }
             }
+
+            /// Returns the escaped character if valid.
+            pub fn chr(self) -> Option<char> {
+                match self {
+                    $(
+                        Self::$name => Some($chr),
+                    )*
+                    Self::Invalid => None,
+                }
+            }
         }
     };
 }
