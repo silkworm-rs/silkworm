@@ -1,4 +1,4 @@
-use std::{alloc, mem};
+use std::{alloc, fmt, mem};
 
 /// Pinned string buffers.
 ///
@@ -7,7 +7,6 @@ use std::{alloc, mem};
 /// The reallocation strategy of `Vec`s (and consequently `String`s) is problematic
 /// because it will try to be clever and reallocate even when unnecessary while
 /// bulk-inserting bytes.
-#[derive(Debug)]
 pub(super) struct PinBuf {
     cur_len: usize,
     cur_buf: Box<[u8]>,
@@ -90,6 +89,12 @@ fn alloc_buf(size: usize) -> Box<[u8]> {
     unsafe { Box::from_raw(slice) }
 }
 
+impl fmt::Debug for PinBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PinBuf {{ cur_len: {}, .. }}", self.cur_len)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,7 +112,7 @@ mod tests {
         }
 
         for (i, &p) in ptrs.iter().enumerate() {
-            let ptr_str = unsafe { std::mem::transmute::<*const str, &'_ str>(p) };
+            let ptr_str = unsafe { &*p };
             assert_eq!(strings[i], ptr_str);
         }
 

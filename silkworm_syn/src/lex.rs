@@ -156,11 +156,16 @@ pub struct Error {
 pub struct LexStream<'a> {
     src: &'a str,
     pos: u32,
+
     fatal: bool,
+    eof_emitted: bool,
+
     block_mode: BlockMode,
     inline_stack: ArrayVec<[InlineMode; MODE_STACK_CAPACITY]>,
+
     last_indent: u32,
     current_line_indent: u32,
+
     delayed: Option<Token>,
 }
 
@@ -173,11 +178,16 @@ impl<'a> LexStream<'a> {
         LexStream {
             src,
             pos,
+
             fatal: false,
+            eof_emitted: false,
+
             block_mode: BlockMode::Header,
             inline_stack,
+
             last_indent: 0,
             current_line_indent: 0,
+
             delayed: None,
         }
     }
@@ -225,7 +235,12 @@ impl<'a> Iterator for LexStream<'a> {
         }
 
         if self.src.is_empty() {
-            return None;
+            if self.eof_emitted {
+                return None;
+            } else {
+                self.eof_emitted = true;
+                return Some(Ok(Token::new(T::Eof, Span::new(self.pos, 0))));
+            }
         }
 
         let inline_mode = self

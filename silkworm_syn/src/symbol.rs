@@ -1,6 +1,5 @@
 //! Interned symbols
 
-use std::mem;
 use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -91,7 +90,7 @@ impl Interner {
 
             let (_, sym) = lookup.raw_entry_mut().from_key(string).or_insert_with(|| {
                 let ptr = buf.push_str(string);
-                let key = mem::transmute::<*const str, &'static str>(ptr);
+                let key = &*ptr;
                 let idx = strings.len();
                 strings.push(key);
                 (key, Symbol::new(*brand, idx))

@@ -60,7 +60,7 @@ impl<'a> Cursor<'a> {
 
     fn consume(&mut self, x: usize) -> usize {
         for consumed in 0..x {
-            if let None = self.chars.next() {
+            if self.chars.next().is_none() {
                 return consumed;
             }
         }

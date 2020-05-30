@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::Span;
 
 /// Binary operators that can be part of an assignment.
@@ -154,6 +156,12 @@ macro_rules! decl_keyword {
                         )*
                     )*
                 }
+            }
+        }
+
+        impl fmt::Display for Keyword {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str(self.into_canonical_str())
             }
         }
     };
@@ -459,5 +467,87 @@ impl Token {
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
+    }
+}
+
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use BinOp as B;
+
+        let show_as = match self {
+            B::Plus => "+",
+            B::Minus => "-",
+            B::Star => "*",
+            B::Slash => "/",
+            B::Percent => "%",
+        };
+
+        f.write_str(show_as)
+    }
+}
+
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Kind as K;
+
+        match self {
+            K::Eq => write!(f, "="),
+            K::BinOpEq(bin_op) => write!(f, "{}=", bin_op),
+            K::OrOr => write!(f, "||"),
+            K::AndAnd => write!(f, "&&"),
+            K::Xor => write!(f, "^"),
+            K::EqEq => write!(f, "=="),
+            K::Neq => write!(f, "!="),
+            K::Gt => write!(f, ">"),
+            K::Lt => write!(f, "<"),
+            K::Gte => write!(f, ">="),
+            K::Lte => write!(f, "<="),
+            K::BinOp(bin_op) => write!(f, "{}", bin_op),
+            K::Not => write!(f, "!"),
+            K::Tilde => write!(f, "~"),
+            K::LineBreak => write!(f, "line break"),
+            K::Eof => write!(f, "end of file"),
+            K::Pragma(PragmaStyle::Inner) => write!(f, "//#!"),
+            K::Pragma(PragmaStyle::Outer) => write!(f, "//#"),
+            K::Comma => write!(f, "','"),
+            K::Period => write!(f, "'.'"),
+            K::Arrow => write!(f, "->"),
+            K::Pipe => write!(f, "|"),
+            K::PipeArrow => write!(f, "|>"),
+            K::Hash => write!(f, "#"),
+            K::TripleDash => write!(f, "---"),
+            K::TripleEq => write!(f, "==="),
+            K::Colon => write!(f, ":"),
+
+            K::OpenDelim(Delim::DoubleQuote) => write!(f, "\""),
+            K::CloseDelim(Delim::DoubleQuote) => write!(f, "\""),
+            K::OpenDelim(Delim::Backtick) => write!(f, "`"),
+            K::CloseDelim(Delim::Backtick) => write!(f, "`"),
+            K::OpenDelim(Delim::DoubleBracket) => write!(f, "[["),
+            K::CloseDelim(Delim::DoubleBracket) => write!(f, "]]"),
+            K::OpenDelim(Delim::DoubleAngleBracket) => write!(f, "<<"),
+            K::CloseDelim(Delim::DoubleAngleBracket) => write!(f, ">>"),
+            K::OpenDelim(Delim::Bracket) => write!(f, "["),
+            K::CloseDelim(Delim::Bracket) => write!(f, "]"),
+            K::OpenDelim(Delim::Paren) => write!(f, "("),
+            K::CloseDelim(Delim::Paren) => write!(f, ")"),
+            K::OpenDelim(Delim::Brace) => write!(f, "{{"),
+            K::CloseDelim(Delim::Brace) => write!(f, "}}"),
+
+            K::Indent => write!(f, "indent"),
+            K::UnIndent => write!(f, "unindent"),
+            K::Keyword(kw) => write!(f, "{}", kw),
+            K::Ident => write!(f, "identifier"),
+            K::Dollar => write!(f, "$"),
+            K::At => write!(f, "@"),
+            K::AtAt => write!(f, "@@"),
+            K::Number => write!(f, "decimal number"),
+            K::Text => write!(f, "text"),
+            K::EscapeChar(_) | K::EscapeByte | K::EscapeUnicode => write!(f, "escape sequence"),
+
+            K::Whitespace => write!(f, "whitespace"),
+            K::Comment => write!(f, "comment"),
+            K::Unknown => write!(f, "unparsable characters"),
+        }
     }
 }

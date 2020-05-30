@@ -10,7 +10,8 @@
 //! components assume that all sources logically reside in a continuous space that can be
 //! indexed using byte positions.
 
-use silkworm_sourcemap::Span;
+pub use silkworm_err::Error;
+pub use silkworm_sourcemap::Span;
 
 pub mod ast;
 pub mod lex;

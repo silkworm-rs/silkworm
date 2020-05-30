@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Span {
     pub base: u32,
     pub len: u32,
@@ -11,16 +11,18 @@ impl Span {
         Span { base, len }
     }
 
-    /// Returns a `Span` with both components set to zero. This is a special value
+    /// Returns a `Span { base: 0xFFFF_FFFF, len: 0 }`. This is a special value
     /// that is reserved for invalid `Span`s.
     pub fn nil() -> Self {
-        Span { base: 0, len: 0 }
+        Span {
+            base: 0xFFFF_FFFF,
+            len: 0,
+        }
     }
 
-    /// Returns `true` if both components are set to zero, indicating that the span
-    /// is invalid.
+    /// Returns `true` if `self` is the `nil` span.
     pub fn is_nil(self) -> bool {
-        self.base == 0 && self.len == 0
+        self.base == 0xFFFF_FFFF && self.len == 0
     }
 
     /// Returns the union between two spans.
@@ -54,6 +56,12 @@ impl Span {
             .checked_sub(span_base)
             .expect("self.base should >= span_base");
         &source[base as usize..(base + self.len) as usize]
+    }
+}
+
+impl Default for Span {
+    fn default() -> Self {
+        Span::nil()
     }
 }
 

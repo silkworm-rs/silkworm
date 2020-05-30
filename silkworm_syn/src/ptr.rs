@@ -74,6 +74,14 @@ impl<T: ?Sized> DerefMut for P<T> {
     }
 }
 
+impl<T: PartialEq> PartialEq for P<T> {
+    fn eq(&self, other: &Self) -> bool {
+        T::eq(self, other)
+    }
+}
+
+impl<T: Eq> Eq for P<T> {}
+
 impl<T: 'static + Clone> Clone for P<T> {
     fn clone(&self) -> P<T> {
         P((**self).clone())
@@ -160,6 +168,6 @@ impl<'a, T> IntoIterator for &'a P<[T]> {
     type Item = &'a T;
     type IntoIter = slice::Iter<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
-        self.ptr.into_iter()
+        self.ptr.iter()
     }
 }

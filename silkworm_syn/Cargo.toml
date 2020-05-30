@@ -18,3 +18,4 @@ arrayvec = "0.5.1"
 thiserror = "1.0"
 hashbrown = { version = "0.7", features = ["raw"] }
 unicode-xid = "0.2"
+arraydeque = "0.4"
