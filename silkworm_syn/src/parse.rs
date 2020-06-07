@@ -123,8 +123,7 @@ where
     #[must_use]
     fn eat_symbol(&mut self) -> Option<(Symbol, Span)> {
         self.eat(TokenKind::Ident).map(|ident| {
-            let sym = ident.span.read(self.ctx.source, self.ctx.span_base);
-            let sym = self.ctx.interner.intern(sym);
+            let sym = self.ctx.intern_span(ident.span);
             (sym, ident.span)
         })
     }
@@ -231,6 +230,13 @@ impl<'a> Display for TokenChoice<'a> {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> ParseCtx<'a> {
+    fn intern_span(&mut self, span: Span) -> Symbol {
+        let sym = span.read(self.source, self.span_base);
+        self.interner.intern(sym)
     }
 }
 
@@ -481,6 +487,16 @@ impl_parse! {
     impl Parse for ast::FormatFunc => parse_format_func {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::FormatFunction;
+        [ .. ]
+    }
+    impl Parse for ast::Var => parse_var {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;
+        [ .. ]
+    }
+    impl Parse for ast::Lit => parse_lit {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;
         [ .. ]
     }
 }

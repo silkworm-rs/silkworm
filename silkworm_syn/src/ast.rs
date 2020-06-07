@@ -20,6 +20,8 @@ pub enum Sigil {
 pub struct Var {
     pub sigil: Sigil,
     pub symbol: Symbol,
+    /// `Some` if the symbol is a keyword.
+    pub keyword: Option<token::Keyword>,
     pub span: Span,
 }
 
@@ -95,6 +97,18 @@ pub enum StrSegment {
     FormatFunc(FormatFunc),
 }
 
+impl StrSegment {
+    /// Get the span of this segment.
+    pub fn span(&self) -> Span {
+        match self {
+            StrSegment::Text(t) => t.span,
+            StrSegment::Escape(t) => t.span,
+            StrSegment::Expr(t) => t.span,
+            StrSegment::FormatFunc(t) => t.span,
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Text {
     pub span: Span,
@@ -123,6 +137,7 @@ pub struct FormatFunc {
     pub path: Path,
     pub expr: Expr,
     pub args: Vec<P<FormatFuncArg>>,
+    pub span: Span,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -146,7 +161,7 @@ pub struct Expr {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ExprKind {
     Var(Var),
-    Call(PathSegment, Vec<P<Expr>>),
+    Call(P<Expr>, Vec<P<Expr>>),
     Unary(UnOp, P<Expr>),
     Binary(BinOp, P<Expr>, P<Expr>),
     Lit(Lit),
@@ -159,7 +174,7 @@ pub struct UnOp {
     pub span: Span,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum UnOpKind {
     Neg,
     Not,
@@ -171,7 +186,7 @@ pub struct BinOp {
     pub span: Span,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum BinOpKind {
     Eq,
     Neq,

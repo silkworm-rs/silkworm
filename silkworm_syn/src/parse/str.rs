@@ -9,6 +9,42 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = Token>,
 {
+    /// Parses a `StrBody` with the given terminator, consuming it.
+    pub fn parse_str_body_with_terminator(&mut self, terminator: T) -> PResult<'a, ast::StrBody> {
+        let mut segments = Vec::new();
+        let span = self.token.span;
+
+        while {
+            if self.token.kind == terminator {
+                false
+            } else {
+                match self.token.kind {
+                    T::Text
+                    | T::EscapeChar(_)
+                    | T::EscapeByte
+                    | T::EscapeUnicode
+                    | T::OpenDelim(Delim::Brace)
+                    | T::OpenDelim(Delim::Bracket) => true,
+                    _ => false,
+                }
+            }
+        } {
+            segments.push(self.parse_str_segment()?);
+        }
+
+        if self.eat(terminator).is_none() {
+            return Err(self.expect(terminator));
+        }
+
+        let span = if let Some(last) = segments.last() {
+            span.union(last.span())
+        } else {
+            span.empty()
+        };
+
+        Ok(ast::StrBody { segments, span })
+    }
+
     pub fn parse_str_segment(&mut self) -> PResult<'a, ast::StrSegment> {
         match self.token.kind {
             T::Text => self.parse_str_segment_text(),
@@ -144,7 +180,17 @@ where
     }
 
     fn parse_str_segment_expr(&mut self) -> PResult<'a, ast::StrSegment> {
-        unimplemented!()
+        if self.eat(T::OpenDelim(Delim::Brace)).is_none() {
+            return Err(self.expect(T::OpenDelim(Delim::Brace)));
+        }
+
+        let expr = self.parse_expr()?;
+
+        if self.eat(T::CloseDelim(Delim::Brace)).is_none() {
+            return Err(self.expect(T::CloseDelim(Delim::Brace)));
+        }
+
+        Ok(ast::StrSegment::Expr(expr))
     }
 
     fn parse_str_segment_format_func(&mut self) -> PResult<'a, ast::StrSegment> {
@@ -213,19 +259,23 @@ mod tests {
     }
 
     #[test]
-    fn can_parse_str_segment_interpolation() {
+    fn can_parse_str_segment_expr() {
         assert_parse(r#"{33 - 4}"#, |itn| {
             ast::StrSegment::Expr(ast::Expr::parse_with_interner("33 - 4", 1, itn).unwrap())
         });
 
+        ast::StrSegment::parse("{1 + 3 <<&&& foo >> bar}", 0).unwrap_err();
+        ast::StrSegment::parse("{ 42", 0).unwrap_err();
+    }
+
+    #[test]
+    fn can_parse_str_segment_format_func() {
         assert_parse(r#"[format_func foo="bar"]"#, |itn| {
             ast::StrSegment::FormatFunc(
                 ast::FormatFunc::parse_with_interner(r#"format_func foo="bar""#, 1, itn).unwrap(),
             )
         });
 
-        ast::StrSegment::parse("{1 + 3 <<&&& foo >> bar}", 0).unwrap_err();
-        ast::StrSegment::parse("{ 42", 0).unwrap_err();
         ast::StrSegment::parse("[foo bar=\"baz]", 0).unwrap_err();
     }
 }
