@@ -509,6 +509,26 @@ impl_parse! {
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;
         [ .. ]
     }
+    impl Parse for ast::Stmt => parse_stmt {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
+        [ .. ]
+    }
+    impl Parse for ast::StmtBody => parse_stmt_body {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
+        [ .. ]
+    }
+    impl Parse for ast::Command => parse_command {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Command;
+        [ .. ]
+    }
+    impl Parse for ast::Hashtag => parse_hashtag {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Hashtag;
+        [ .. ]
+    }
 }
 
 mod private {

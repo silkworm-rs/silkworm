@@ -249,17 +249,18 @@ pub enum CommandKind {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Stmt {
-    pub span: Span,
     pub pragmas: Vec<P<Pragma>>,
     pub body: StmtBody,
     pub decorator_command: Option<P<Command>>,
-    pub hashtags: Vec<P<Hashtag>>,
+    pub hashtags: Vec<Hashtag>,
     pub associated_block: Option<P<Block>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Hashtag {
     pub span: Span,
+    pub path: Path,
+    pub value: Text,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
