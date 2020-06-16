@@ -321,13 +321,11 @@ impl<'a> Iterator for LexStream<'a> {
                     }
                 }
 
-                T::Arrow => {
-                    if inline_mode == I::OptionTextOrTarget {
-                        C::Replace(I::OptionTarget)
-                    } else {
-                        C::Keep
-                    }
-                }
+                T::Arrow => match inline_mode {
+                    I::StartOfLine => C::Replace(I::FreeText),
+                    I::OptionTextOrTarget => C::Replace(I::OptionTarget),
+                    _ => C::Keep,
+                },
 
                 T::Pipe | T::PipeArrow => {
                     if inline_mode == I::OptionTextOrTarget {

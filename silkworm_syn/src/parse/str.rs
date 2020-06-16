@@ -10,13 +10,40 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = Token>,
 {
+    /// Parses a `StrBody` until end of input. Used for `Parse` implementation.
+    pub fn parse_str_body(&mut self) -> PResult<'a, ast::StrBody> {
+        let (str_body, _): (_, Option<()>) =
+            self.parse_str_body_with_terminator_parser(|_| None)?;
+        Ok(str_body)
+    }
+
     /// Parses a `StrBody` with the given terminator, consuming it.
     pub fn parse_str_body_with_terminator(&mut self, terminator: T) -> PResult<'a, ast::StrBody> {
+        let (str_body, term) = self.parse_str_body_with_terminator_parser(|p| p.eat(terminator))?;
+
+        if term.is_some() {
+            Ok(str_body)
+        } else {
+            Err(self.expect(terminator))
+        }
+    }
+
+    /// Parses a `StrBody` with the given terminator, consuming it.
+    pub fn parse_str_body_with_terminator_parser<F, U>(
+        &mut self,
+        mut terminator: F,
+    ) -> PResult<'a, (ast::StrBody, Option<U>)>
+    where
+        F: FnMut(&mut Self) -> Option<U>,
+    {
         let mut segments = Vec::new();
         let span = self.token.span;
 
+        let mut term = None;
+
         while {
-            if self.token.kind == terminator {
+            if let Some(terminator) = terminator(self) {
+                term = Some(terminator);
                 false
             } else {
                 match self.token.kind {
@@ -33,17 +60,13 @@ where
             segments.push(self.parse_str_segment()?);
         }
 
-        if self.eat(terminator).is_none() {
-            return Err(self.expect(terminator));
-        }
-
         let span = if let Some(last) = segments.last() {
             span.union(last.span())
         } else {
             span.empty()
         };
 
-        Ok(ast::StrBody { segments, span })
+        Ok((ast::StrBody { segments, span }, term))
     }
 
     pub fn parse_str_segment(&mut self) -> PResult<'a, ast::StrSegment> {
@@ -65,12 +88,16 @@ where
         }
     }
 
-    fn parse_str_segment_text(&mut self) -> PResult<'a, ast::StrSegment> {
+    pub fn parse_text(&mut self) -> PResult<'a, ast::Text> {
         let mut span = self.token.span;
         while let Some(token) = self.eat(T::Text) {
             span = span.union(token.span);
         }
-        Ok(ast::StrSegment::Text(ast::Text { span }))
+        Ok(ast::Text { span })
+    }
+
+    fn parse_str_segment_text(&mut self) -> PResult<'a, ast::StrSegment> {
+        self.parse_text().map(ast::StrSegment::Text)
     }
 
     fn parse_str_segment_escape_char(
@@ -181,65 +208,42 @@ where
     }
 
     fn parse_str_segment_expr(&mut self) -> PResult<'a, ast::StrSegment> {
-        if self.eat(T::OpenDelim(Delim::Brace)).is_none() {
-            return Err(self.expect(T::OpenDelim(Delim::Brace)));
-        }
+        let open = self
+            .eat(T::OpenDelim(Delim::Brace))
+            .ok_or_else(|| self.expect(T::OpenDelim(Delim::Brace)))?;
 
-        let expr = match self.parse_expr() {
-            Ok(expr) => expr,
-            Err(mut err) => {
-                let (_, span) = self.eat_until_with_or_end_of_line(|p| {
-                    p.eat(T::CloseDelim(Delim::Brace)).map(|tok| ((), tok.span))
-                });
+        let expr = self.parse_or_eat_till(T::CloseDelim(Delim::Brace), Self::parse_expr)?;
 
-                if let Some(span) = span {
-                    err = err.annotate_span(span, "extra tokens");
-                }
+        let close = self
+            .eat(T::CloseDelim(Delim::Brace))
+            .ok_or_else(|| self.expect(T::CloseDelim(Delim::Brace)))?;
 
-                return Err(err);
-            }
-        };
-
-        if self.eat(T::CloseDelim(Delim::Brace)).is_none() {
-            return Err(self.expect(T::CloseDelim(Delim::Brace)));
-        }
-
-        Ok(ast::StrSegment::Expr(expr))
+        Ok(ast::StrSegment::Expr(open.span.union(close.span), P(expr)))
     }
 
     fn parse_str_segment_format_func(&mut self) -> PResult<'a, ast::StrSegment> {
-        if self.eat(T::OpenDelim(Delim::Bracket)).is_none() {
-            return Err(self.expect(T::OpenDelim(Delim::Bracket)));
-        }
+        let open = self
+            .eat(T::OpenDelim(Delim::Bracket))
+            .ok_or_else(|| self.expect(T::OpenDelim(Delim::Bracket)))?;
 
-        let format_func = match self.parse_format_func() {
-            Ok(format_func) => format_func,
-            Err(mut err) => {
-                let (_, span) = self.eat_until_with_or_end_of_line(|p| {
-                    p.eat(T::CloseDelim(Delim::Bracket))
-                        .map(|tok| ((), tok.span))
-                });
+        let format_func =
+            self.parse_or_eat_till(T::CloseDelim(Delim::Bracket), Self::parse_format_func)?;
 
-                if let Some(span) = span {
-                    err = err.annotate_span(span, "extra tokens");
-                }
+        let close = self
+            .eat(T::CloseDelim(Delim::Bracket))
+            .ok_or_else(|| self.expect(T::CloseDelim(Delim::Bracket)))?;
 
-                return Err(err);
-            }
-        };
-
-        if self.eat(T::CloseDelim(Delim::Bracket)).is_none() {
-            return Err(self.expect(T::CloseDelim(Delim::Bracket)));
-        }
-
-        Ok(ast::StrSegment::FormatFunc(format_func))
+        Ok(ast::StrSegment::FormatFunc(
+            open.span.union(close.span),
+            format_func,
+        ))
     }
 
     pub fn parse_format_func(&mut self) -> PResult<'a, ast::FormatFunc> {
         let path = self.parse_path()?;
         let span = path.span;
 
-        let expr = if let ast::StrSegment::Expr(expr) = self.parse_str_segment_expr()? {
+        let expr = if let ast::StrSegment::Expr(_, expr) = self.parse_str_segment_expr()? {
             expr
         } else {
             panic!("parse_str_segment_expr should only return the Expr variant");
@@ -263,7 +267,7 @@ where
                 p.expect_one_of(&[T::Ident, T::Number, T::CloseDelim(Delim::Bracket)])
                     .span(span);
             },
-            |p| p.parse_format_func_arg().ok().map(P),
+            |p| p.parse_format_func_arg().ok(),
         );
 
         let span = span.union(args_span);
@@ -288,7 +292,7 @@ where
             }
         }
 
-        let value = self.parse_lit()?;
+        let value = P(self.parse_unary_expr_or_higher()?);
 
         Ok(ast::FormatFuncArg { key, value })
     }
@@ -367,7 +371,10 @@ mod tests {
     #[test]
     fn can_parse_str_segment_expr() {
         assert_parse(r#"{33 - 4}"#, |itn| {
-            ast::StrSegment::Expr(ast::Expr::parse_with_interner("33 - 4", 1, itn).unwrap())
+            ast::StrSegment::Expr(
+                Span::new(0, 8),
+                P(ast::Expr::parse_with_interner("33 - 4", 1, itn).unwrap()),
+            )
         });
 
         ast::StrSegment::parse("{1 + 3 <<&&& foo >> bar}", 0).unwrap_err();
@@ -379,24 +386,30 @@ mod tests {
         assert_parse(
             r#"[format_func {$foo + bar} foo="bar" 42=`baz{$foo}`]"#,
             |itn| {
-                ast::StrSegment::FormatFunc(ast::FormatFunc {
-                    path: ast::Path::parse_with_interner("format_func", 1, itn).unwrap(),
-                    expr: ast::Expr::parse_with_interner("$foo + bar", 14, itn).unwrap(),
-                    args: vec![
-                        P(ast::FormatFuncArg {
-                            key: ast::FormatFuncArgKey::Path(
-                                ast::Path::parse_with_interner("foo", 26, itn).unwrap(),
-                            ),
-                            value: ast::Lit::parse_with_interner(r#""bar""#, 30, itn).unwrap(),
-                        }),
-                        P(ast::FormatFuncArg {
-                            key: ast::FormatFuncArgKey::Num(Span::new(36, 2)),
-                            value: ast::Lit::parse_with_interner(r#"`baz{$foo}`"#, 39, itn)
-                                .unwrap(),
-                        }),
-                    ],
-                    span: Span::new(1, 49),
-                })
+                ast::StrSegment::FormatFunc(
+                    Span::new(0, 51),
+                    ast::FormatFunc {
+                        path: ast::Path::parse_with_interner("format_func", 1, itn).unwrap(),
+                        expr: P(ast::Expr::parse_with_interner("$foo + bar", 14, itn).unwrap()),
+                        args: vec![
+                            ast::FormatFuncArg {
+                                key: ast::FormatFuncArgKey::Path(
+                                    ast::Path::parse_with_interner("foo", 26, itn).unwrap(),
+                                ),
+                                value: P(ast::Lit::parse_with_interner(r#""bar""#, 30, itn)
+                                    .unwrap()
+                                    .into()),
+                            },
+                            ast::FormatFuncArg {
+                                key: ast::FormatFuncArgKey::Num(Span::new(36, 2)),
+                                value: P(ast::Lit::parse_with_interner(r#"`baz{$foo}`"#, 39, itn)
+                                    .unwrap()
+                                    .into()),
+                            },
+                        ],
+                        span: Span::new(1, 49),
+                    },
+                )
             },
         );
 

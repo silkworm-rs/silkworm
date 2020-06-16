@@ -71,7 +71,7 @@ where
         Ok(bin_op)
     }
 
-    fn parse_unary_expr_or_higher(&mut self) -> PResult<'a, ast::Expr> {
+    pub fn parse_unary_expr_or_higher(&mut self) -> PResult<'a, ast::Expr> {
         let (kind, span) = match self.token.kind {
             T::BinOp(BinOp::Minus) => (ast::UnOpKind::Neg, self.bump().span),
             T::Not => (ast::UnOpKind::Not, self.bump().span),
@@ -96,7 +96,7 @@ where
         })
     }
 
-    fn parse_call_expr_or_atom(&mut self) -> PResult<'a, ast::Expr> {
+    pub fn parse_call_expr_or_atom(&mut self) -> PResult<'a, ast::Expr> {
         let receiver = self.parse_atom()?;
 
         if self.eat(T::OpenDelim(Delim::Paren)).is_none() {
@@ -110,7 +110,7 @@ where
                 p.expect_one_of(&[T::Comma, T::CloseDelim(Delim::Paren)])
                     .span(span);
             },
-            |p| p.parse_expr().ok().map(P),
+            |p| p.parse_expr().ok(),
         );
 
         Ok(ast::Expr {
@@ -119,7 +119,7 @@ where
         })
     }
 
-    fn parse_atom(&mut self) -> PResult<'a, ast::Expr> {
+    pub fn parse_atom(&mut self) -> PResult<'a, ast::Expr> {
         match self.token.kind {
             T::OpenDelim(Delim::Paren) => {
                 let span = self.bump().span;
@@ -206,13 +206,13 @@ where
                 let body =
                     self.parse_str_body_with_terminator(T::CloseDelim(Delim::DoubleQuote))?;
                 let span = body.span;
-                (ast::LitKind::Str(P(body)), span)
+                (ast::LitKind::Str(body), span)
             }
             T::OpenDelim(Delim::Backtick) => {
                 self.bump();
                 let body = self.parse_str_body_with_terminator(T::CloseDelim(Delim::Backtick))?;
                 let span = body.span;
-                (ast::LitKind::Str(P(body)), span)
+                (ast::LitKind::Str(body), span)
             }
             _ => {
                 return Err(self.expect_one_of(&[
@@ -392,6 +392,17 @@ mod tests {
             span: Span::new(0, 11),
         });
 
+        assert_parse("bar()", |itn| ast::Expr {
+            kind: ast::ExprKind::Call(
+                P(ast::Expr {
+                    kind: ast::ExprKind::Var(ast::Var::parse_with_interner("bar", 0, itn).unwrap()),
+                    span: Span::new(0, 3),
+                }),
+                Vec::new(),
+            ),
+            span: Span::new(0, 5),
+        });
+
         assert_parse("$foo = bar(42, 1 + 2 + @@baz(quux, )) || false", |itn| {
             ast::Expr {
                 kind: ast::ExprKind::Binary(
@@ -420,13 +431,13 @@ mod tests {
                                         span: Span::new(7, 3),
                                     }),
                                     vec![
-                                        P(ast::Expr::parse_with_interner("42", 11, itn).unwrap()),
-                                        P(ast::Expr::parse_with_interner(
+                                        ast::Expr::parse_with_interner("42", 11, itn).unwrap(),
+                                        ast::Expr::parse_with_interner(
                                             "1 + 2 + @@baz(quux, )",
                                             15,
                                             itn,
                                         )
-                                        .unwrap()),
+                                        .unwrap(),
                                     ],
                                 ),
                                 span: Span::new(7, 31),

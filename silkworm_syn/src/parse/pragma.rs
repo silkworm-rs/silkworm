@@ -55,14 +55,14 @@ where
         }
     }
 
-    fn parse_meta_list(&mut self, terminator: T) -> (Vec<P<ast::Meta>>, Span) {
+    fn parse_meta_list(&mut self, terminator: T) -> (Vec<ast::Meta>, Span) {
         self.parse_list_with(
             true,
             parse_list_sep_with_term(true, T::Comma, terminator),
             |p, span| {
                 p.expect_one_of(&[T::Comma, terminator]).span(span);
             },
-            |p| p.parse_meta().ok().map(P),
+            |p| p.parse_meta().ok(),
         )
     }
 }
@@ -88,29 +88,29 @@ mod tests {
 
         assert_parse("foo.bar ( foo( foo .baz() ))", |itn| ast::Meta {
             path: ast::Path::parse_with_interner("foo.bar", 0, itn).unwrap(),
-            args: Some(vec![P(ast::Meta {
+            args: Some(vec![ast::Meta {
                 path: ast::Path::parse_with_interner("foo", 10, itn).unwrap(),
-                args: Some(vec![P(ast::Meta {
+                args: Some(vec![ast::Meta {
                     path: ast::Path::parse_with_interner("foo .baz", 15, itn).unwrap(),
                     args: Some(vec![]),
-                })]),
-            })]),
+                }]),
+            }]),
         });
 
         assert_parse("foo.bar(foo, foo.baz(quux))", |itn| ast::Meta {
             path: ast::Path::parse_with_interner("foo.bar", 0, itn).unwrap(),
             args: Some(vec![
-                P(ast::Meta {
+                ast::Meta {
                     path: ast::Path::parse_with_interner("foo", 8, itn).unwrap(),
                     args: None,
-                }),
-                P(ast::Meta {
+                },
+                ast::Meta {
                     path: ast::Path::parse_with_interner("foo.baz", 13, itn).unwrap(),
-                    args: Some(vec![P(ast::Meta {
+                    args: Some(vec![ast::Meta {
                         path: ast::Path::parse_with_interner("quux", 21, itn).unwrap(),
                         args: None,
-                    })]),
-                }),
+                    }]),
+                },
             ]),
         });
     }
@@ -121,9 +121,9 @@ mod tests {
             span: Span::new(0, 27),
             style: ast::PragmaStyle::Outer,
             meta: vec![
-                P(ast::Meta::parse_with_interner("foo(bar)", 4, itn).unwrap()),
-                P(ast::Meta::parse_with_interner("bar", 14, itn).unwrap()),
-                P(ast::Meta::parse_with_interner("baz(foo)", 42, itn).unwrap()),
+                ast::Meta::parse_with_interner("foo(bar)", 4, itn).unwrap(),
+                ast::Meta::parse_with_interner("bar", 14, itn).unwrap(),
+                ast::Meta::parse_with_interner("baz(foo)", 42, itn).unwrap(),
             ],
         });
 
@@ -131,8 +131,8 @@ mod tests {
             span: Span::new(0, 15),
             style: ast::PragmaStyle::Inner,
             meta: vec![
-                P(ast::Meta::parse_with_interner("foo", 4, itn).unwrap()),
-                P(ast::Meta::parse_with_interner("bar", 10, itn).unwrap()),
+                ast::Meta::parse_with_interner("foo", 4, itn).unwrap(),
+                ast::Meta::parse_with_interner("bar", 10, itn).unwrap(),
             ],
         });
 

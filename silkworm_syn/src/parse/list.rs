@@ -32,7 +32,7 @@ where
         let base_span = self.token.span.empty();
 
         if allow_empty && Some(ListSep::Term) == sep(self) {
-            return (Vec::new(), base_span);
+            return (Vec::new(), base_span.union(self.token.span.empty()));
         }
 
         loop {

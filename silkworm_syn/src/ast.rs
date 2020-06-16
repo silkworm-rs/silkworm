@@ -93,8 +93,10 @@ pub struct StrBody {
 pub enum StrSegment {
     Text(Text),
     Escape(Escape),
-    Expr(Expr),
-    FormatFunc(FormatFunc),
+    /// `Expr` interpolation (`{}`). The first element is the full span including delimiters.
+    Expr(Span, P<Expr>),
+    /// `FormatFunc` interpolation (`[]`). The first element is the full span including delimiters.
+    FormatFunc(Span, FormatFunc),
 }
 
 impl StrSegment {
@@ -103,8 +105,8 @@ impl StrSegment {
         match self {
             StrSegment::Text(t) => t.span,
             StrSegment::Escape(t) => t.span,
-            StrSegment::Expr(t) => t.span,
-            StrSegment::FormatFunc(t) => t.span,
+            StrSegment::Expr(span, _) => *span,
+            StrSegment::FormatFunc(span, _) => *span,
         }
     }
 }
@@ -135,15 +137,15 @@ pub enum EscapeKind {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct FormatFunc {
     pub path: Path,
-    pub expr: Expr,
-    pub args: Vec<P<FormatFuncArg>>,
+    pub expr: P<Expr>,
+    pub args: Vec<FormatFuncArg>,
     pub span: Span,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct FormatFuncArg {
     pub key: FormatFuncArgKey,
-    pub value: Lit,
+    pub value: P<Expr>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -158,10 +160,28 @@ pub struct Expr {
     pub span: Span,
 }
 
+impl From<Var> for Expr {
+    fn from(var: Var) -> Self {
+        Expr {
+            span: var.span,
+            kind: ExprKind::Var(var),
+        }
+    }
+}
+
+impl From<Lit> for Expr {
+    fn from(lit: Lit) -> Self {
+        Expr {
+            span: lit.span,
+            kind: ExprKind::Lit(lit),
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ExprKind {
     Var(Var),
-    Call(P<Expr>, Vec<P<Expr>>),
+    Call(P<Expr>, Vec<Expr>),
     Unary(UnOp, P<Expr>),
     Binary(BinOp, P<Expr>, P<Expr>),
     Lit(Lit),
@@ -225,7 +245,7 @@ pub enum LitKind {
     True,
     False,
     Null,
-    Str(P<StrBody>),
+    Str(StrBody),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -236,38 +256,36 @@ pub struct Command {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum CommandKind {
-    Set(P<Var>, P<Expr>),
+    Set(Var, P<Expr>),
     Call(P<Expr>),
-    Expr(P<Expr>),
     If(P<Expr>),
-    ElseIf,
+    ElseIf(P<Expr>),
     Else,
     EndIf,
     Return(Option<P<Expr>>),
-    Custom(Vec<token::Token>),
+    Custom(StrBody),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Stmt {
-    pub pragmas: Vec<P<Pragma>>,
+    pub pragmas: Vec<Pragma>,
     pub body: StmtBody,
-    pub decorator_command: Option<P<Command>>,
+    pub decorator_command: Option<Command>,
     pub hashtags: Vec<Hashtag>,
-    pub associated_block: Option<P<Block>>,
+    pub associated_block: Option<Block>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Hashtag {
     pub span: Span,
-    pub path: Path,
-    pub value: Text,
+    pub text: Text,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Pragma {
     pub span: Span,
     pub style: PragmaStyle,
-    pub meta: Vec<P<Meta>>,
+    pub meta: Vec<Meta>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -290,7 +308,7 @@ impl From<token::PragmaStyle> for PragmaStyle {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Meta {
     pub path: Path,
-    pub args: Option<Vec<P<Meta>>>,
+    pub args: Option<Vec<Meta>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -301,10 +319,10 @@ pub struct StmtBody {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum StmtKind {
-    Text(P<StrBody>),
-    Command(P<Command>),
-    Flow(P<Flow>),
-    ShortcutOption(P<ShortcutOption>),
+    Text(StrBody),
+    Command(Command),
+    Flow(Flow),
+    ShortcutOption(ShortcutOption),
     Block(Block),
 }
 
@@ -312,27 +330,27 @@ pub enum StmtKind {
 pub struct Flow {
     pub span: Span,
     pub is_subroutine: bool,
-    pub option_text: Option<P<StrBody>>,
+    pub option_text: Option<StrBody>,
     pub target: Path,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct ShortcutOption {
     pub span: Span,
-    pub text: P<StrBody>,
+    pub text: StrBody,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Block {
     pub span: Span,
-    pub inner_pragmas: Vec<P<Pragma>>,
+    pub inner_pragmas: Vec<Pragma>,
     pub stmts: Vec<Stmt>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Node {
     pub span: Span,
-    pub outer_pragmas: Vec<P<Pragma>>,
+    pub outer_pragmas: Vec<Pragma>,
     pub headers: Vec<NodeHeader>,
     pub body: Block,
 }
@@ -346,7 +364,7 @@ pub enum NodeHeader {
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct File {
-    pub inner_pragmas: Vec<P<Pragma>>,
+    pub inner_pragmas: Vec<Pragma>,
     pub span: Span,
-    pub nodes: Vec<P<Node>>,
+    pub nodes: Vec<Node>,
 }

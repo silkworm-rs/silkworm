@@ -156,6 +156,22 @@ where
         }
     }
 
+    /// Parse using a method. If `parse` has failed, it will then eat all tokens until
+    /// `terminator` or end of line, consuming the terminator if found.
+    fn parse_or_eat_till<F, U>(&mut self, terminator: TokenKind, parse: F) -> PResult<'a, U>
+    where
+        F: FnOnce(&mut Self) -> PResult<'a, U>,
+    {
+        parse(self).map_err(|err| {
+            let (_, span) =
+                self.eat_until_with_or_end_of_line(|p| p.eat(terminator).map(|tok| ((), tok.span)));
+            if let Some(span) = span {
+                err.annotate_span(span, "extra tokens");
+            }
+            err
+        })
+    }
+
     /// Peeks the nth token *after* the current token. Returns `None` if beyond EOF.
     fn peek_nth(&mut self, n: usize) -> Option<Token> {
         self.token_stream.peek_nth(n)
@@ -474,7 +490,17 @@ impl_parse! {
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Meta;
         [ .. ]
     }
+    impl Parse for ast::StrBody => parse_str_body {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::InterpolatedStringLiteral;
+        [ .. ]
+    }
     impl Parse for ast::StrSegment => parse_str_segment {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::InterpolatedStringLiteral;
+        [ .. ]
+    }
+    impl Parse for ast::Text => parse_text {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::InterpolatedStringLiteral;
         [ .. ]
@@ -522,6 +548,16 @@ impl_parse! {
     impl Parse for ast::Command => parse_command {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Command;
+        [ .. ]
+    }
+    impl Parse for ast::Flow => parse_flow {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::OptionTextOrTarget;
+        [ .. ]
+    }
+    impl Parse for ast::ShortcutOption => parse_shortcut_option {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
         [ .. ]
     }
     impl Parse for ast::Hashtag => parse_hashtag {

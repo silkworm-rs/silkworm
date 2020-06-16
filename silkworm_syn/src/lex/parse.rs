@@ -173,17 +173,15 @@ impl<'a> Cursor<'a> {
 
         let next = self.nth_char(0);
 
-        if self.inline_mode.may_contain_whitespace() {
-            if cur.is_whitespace() {
-                while {
-                    let next = self.nth_char(0);
-                    next != EOF_CHAR && next.is_whitespace()
-                } {
-                    self.bump();
-                }
-
-                return T::Whitespace;
+        if self.inline_mode.may_contain_whitespace() && cur.is_whitespace() {
+            while {
+                let next = self.nth_char(0);
+                next != EOF_CHAR && next.is_whitespace()
+            } {
+                self.bump();
             }
+
+            return T::Whitespace;
         }
 
         if self.inline_mode.may_contain_commands() {
