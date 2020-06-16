@@ -489,6 +489,16 @@ impl_parse! {
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::FormatFunction;
         [ .. ]
     }
+    impl Parse for ast::FormatFuncArg => parse_format_func_arg {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::FormatFunction;
+        [ .. ]
+    }
+    impl Parse for ast::FormatFuncArgKey => parse_format_func_arg_key {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::FormatFunction;
+        [ .. ]
+    }
     impl Parse for ast::Var => parse_var {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;

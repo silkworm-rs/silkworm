@@ -19,9 +19,7 @@ where
                     Some(ListSep::Term)
                 }
             },
-            |p, span| {
-                p.expect(T::Period).span(span);
-            },
+            |_, _| panic!("sep should never fail"),
             |p| match p.eat_symbol() {
                 Some((symbol, span)) => Some(ast::PathSegment { symbol, span }),
                 None => {

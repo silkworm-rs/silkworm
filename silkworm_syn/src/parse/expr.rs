@@ -202,12 +202,14 @@ where
             T::Keyword(Keyword::False) => (ast::LitKind::False, self.bump().span),
             T::Keyword(Keyword::Null) => (ast::LitKind::Null, self.bump().span),
             T::OpenDelim(Delim::DoubleQuote) => {
+                self.bump();
                 let body =
                     self.parse_str_body_with_terminator(T::CloseDelim(Delim::DoubleQuote))?;
                 let span = body.span;
                 (ast::LitKind::Str(P(body)), span)
             }
             T::OpenDelim(Delim::Backtick) => {
+                self.bump();
                 let body = self.parse_str_body_with_terminator(T::CloseDelim(Delim::Backtick))?;
                 let span = body.span;
                 (ast::LitKind::Str(P(body)), span)

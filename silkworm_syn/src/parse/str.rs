@@ -1,8 +1,9 @@
 use crate::ast;
-
+use crate::ptr::P;
 use crate::token::{Delim, EscapeChar, Kind as T, Token};
 use crate::Span;
 
+use super::list::ListSep;
 use super::{PResult, Parser};
 
 impl<'a, I> Parser<'a, I>
@@ -184,7 +185,20 @@ where
             return Err(self.expect(T::OpenDelim(Delim::Brace)));
         }
 
-        let expr = self.parse_expr()?;
+        let expr = match self.parse_expr() {
+            Ok(expr) => expr,
+            Err(mut err) => {
+                let (_, span) = self.eat_until_with_or_end_of_line(|p| {
+                    p.eat(T::CloseDelim(Delim::Brace)).map(|tok| ((), tok.span))
+                });
+
+                if let Some(span) = span {
+                    err = err.annotate_span(span, "extra tokens");
+                }
+
+                return Err(err);
+            }
+        };
 
         if self.eat(T::CloseDelim(Delim::Brace)).is_none() {
             return Err(self.expect(T::CloseDelim(Delim::Brace)));
@@ -194,11 +208,103 @@ where
     }
 
     fn parse_str_segment_format_func(&mut self) -> PResult<'a, ast::StrSegment> {
-        unimplemented!()
+        if self.eat(T::OpenDelim(Delim::Bracket)).is_none() {
+            return Err(self.expect(T::OpenDelim(Delim::Bracket)));
+        }
+
+        let format_func = match self.parse_format_func() {
+            Ok(format_func) => format_func,
+            Err(mut err) => {
+                let (_, span) = self.eat_until_with_or_end_of_line(|p| {
+                    p.eat(T::CloseDelim(Delim::Bracket))
+                        .map(|tok| ((), tok.span))
+                });
+
+                if let Some(span) = span {
+                    err = err.annotate_span(span, "extra tokens");
+                }
+
+                return Err(err);
+            }
+        };
+
+        if self.eat(T::CloseDelim(Delim::Bracket)).is_none() {
+            return Err(self.expect(T::CloseDelim(Delim::Bracket)));
+        }
+
+        Ok(ast::StrSegment::FormatFunc(format_func))
     }
 
     pub fn parse_format_func(&mut self) -> PResult<'a, ast::FormatFunc> {
-        unimplemented!()
+        let path = self.parse_path()?;
+        let span = path.span;
+
+        let expr = if let ast::StrSegment::Expr(expr) = self.parse_str_segment_expr()? {
+            expr
+        } else {
+            panic!("parse_str_segment_expr should only return the Expr variant");
+        };
+
+        let (args, args_span) = self.parse_list_with(
+            true,
+            |p| {
+                if p.check(T::CloseDelim(Delim::Bracket))
+                    || p.check(T::Eof)
+                    || p.check(T::LineBreak)
+                {
+                    Some(ListSep::Term)
+                } else if p.check(T::Number) || p.check(T::Ident) {
+                    Some(ListSep::Sep)
+                } else {
+                    None
+                }
+            },
+            |p, span| {
+                p.expect_one_of(&[T::Ident, T::Number, T::CloseDelim(Delim::Bracket)])
+                    .span(span);
+            },
+            |p| p.parse_format_func_arg().ok().map(P),
+        );
+
+        let span = span.union(args_span);
+
+        Ok(ast::FormatFunc {
+            path,
+            expr,
+            args,
+            span,
+        })
+    }
+
+    pub fn parse_format_func_arg(&mut self) -> PResult<'a, ast::FormatFuncArg> {
+        let key = self.parse_format_func_arg_key()?;
+
+        if self.eat(T::Eq).is_none() {
+            let err = self.expect_one_of(&[T::Eq]);
+            let (_, span) =
+                self.eat_until_with_or_end_of_line(|p| p.eat(T::Eq).map(|tok| ((), tok.span)));
+            if let Some(span) = span {
+                err.span(span);
+            }
+        }
+
+        let value = self.parse_lit()?;
+
+        Ok(ast::FormatFuncArg { key, value })
+    }
+
+    pub fn parse_format_func_arg_key(&mut self) -> PResult<'a, ast::FormatFuncArgKey> {
+        match self.token.kind {
+            T::Number => {
+                let token = self.bump();
+                Ok(ast::FormatFuncArgKey::Num(token.span))
+            }
+            T::Ident => {
+                let path = self.parse_path()?;
+                Ok(ast::FormatFuncArgKey::Path(path))
+            }
+            _ => Err(self.expect_one_of(&[T::Number, T::Ident])),
+        }
     }
 }
 
@@ -270,12 +376,30 @@ mod tests {
 
     #[test]
     fn can_parse_str_segment_format_func() {
-        assert_parse(r#"[format_func foo="bar"]"#, |itn| {
-            ast::StrSegment::FormatFunc(
-                ast::FormatFunc::parse_with_interner(r#"format_func foo="bar""#, 1, itn).unwrap(),
-            )
-        });
+        assert_parse(
+            r#"[format_func {$foo + bar} foo="bar" 42=`baz{$foo}`]"#,
+            |itn| {
+                ast::StrSegment::FormatFunc(ast::FormatFunc {
+                    path: ast::Path::parse_with_interner("format_func", 1, itn).unwrap(),
+                    expr: ast::Expr::parse_with_interner("$foo + bar", 14, itn).unwrap(),
+                    args: vec![
+                        P(ast::FormatFuncArg {
+                            key: ast::FormatFuncArgKey::Path(
+                                ast::Path::parse_with_interner("foo", 26, itn).unwrap(),
+                            ),
+                            value: ast::Lit::parse_with_interner(r#""bar""#, 30, itn).unwrap(),
+                        }),
+                        P(ast::FormatFuncArg {
+                            key: ast::FormatFuncArgKey::Num(Span::new(36, 2)),
+                            value: ast::Lit::parse_with_interner(r#"`baz{$foo}`"#, 39, itn)
+                                .unwrap(),
+                        }),
+                    ],
+                    span: Span::new(1, 49),
+                })
+            },
+        );
 
-        ast::StrSegment::parse("[foo bar=\"baz]", 0).unwrap_err();
+        ast::StrSegment::parse("[foo {$bar} bar=\"baz]", 0).unwrap_err();
     }
 }

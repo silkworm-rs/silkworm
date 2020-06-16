@@ -143,7 +143,7 @@ pub struct FormatFunc {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct FormatFuncArg {
     pub key: FormatFuncArgKey,
-    pub value: StrBody,
+    pub value: Lit,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
