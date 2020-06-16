@@ -456,6 +456,8 @@ mod tests {
             <<else>>
                 Oops {$oops}! <<if $foo>> //Oops!
             <<endif>>
+
+            [format_func {$expr} foo="bar"]
             
             <<move camera left>>
             <<unlockAchievement beganAdventure>>

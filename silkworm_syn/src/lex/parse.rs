@@ -383,6 +383,7 @@ impl<'a> Cursor<'a> {
                         T::CloseDelim(D::Bracket)
                     }
                 }
+                '{' => T::OpenDelim(D::Brace),
                 '}' => T::CloseDelim(D::Brace),
                 '"' => T::OpenDelim(D::DoubleQuote),
                 '`' => T::OpenDelim(D::Backtick),
