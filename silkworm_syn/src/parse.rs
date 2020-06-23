@@ -106,6 +106,25 @@ where
         is_current
     }
 
+    /// Checks if the current token is a `Pragma` and returns the style if true. This adds
+    /// the token to `expected_tokens` on failure.
+    #[must_use]
+    fn check_pragma(&mut self) -> Option<crate::token::PragmaStyle> {
+        match self.token.kind {
+            TokenKind::Pragma(style) => Some(style),
+            _ => {
+                use crate::token::PragmaStyle as Style;
+
+                self.expected_tokens.extend(&[
+                    TokenKind::Pragma(Style::Outer),
+                    TokenKind::Pragma(Style::Inner),
+                ]);
+
+                None
+            }
+        }
+    }
+
     /// Eats a token if it matches `kind` and returns it. This adds the token to
     /// `expected_tokens` on failure.
     #[must_use]
@@ -126,6 +145,14 @@ where
             let sym = self.ctx.intern_span(ident.span);
             (sym, ident.span)
         })
+    }
+
+    /// Eat all tokens until end of line, without consuming the terminating token.
+    /// Returns the span of all tokens eaten this way, or `None` if there
+    /// is none.
+    fn eat_until_end_of_line(&mut self) -> Option<Span> {
+        let (_, span): (Option<()>, _) = self.eat_until_with_or_end_of_line(|_| None);
+        span
     }
 
     /// Eat all tokens until `op` returns `Some` or end of line, without consuming the
@@ -157,14 +184,19 @@ where
     }
 
     /// Parse using a method. If `parse` has failed, it will then eat all tokens until
-    /// `terminator` or end of line, consuming the terminator if found.
+    /// `terminator` or end of line, without consuming the terminator if found.
     fn parse_or_eat_till<F, U>(&mut self, terminator: TokenKind, parse: F) -> PResult<'a, U>
     where
         F: FnOnce(&mut Self) -> PResult<'a, U>,
     {
         parse(self).map_err(|err| {
-            let (_, span) =
-                self.eat_until_with_or_end_of_line(|p| p.eat(terminator).map(|tok| ((), tok.span)));
+            let (_, span) = self.eat_until_with_or_end_of_line(|p| {
+                if p.check(terminator) {
+                    Some(())
+                } else {
+                    None
+                }
+            });
             if let Some(span) = span {
                 err.annotate_span(span, "extra tokens");
             }
@@ -575,13 +607,19 @@ mod private {
 mod test_utils {
     use super::*;
 
+    // Use pretty_assertions for `assert_eq` diffs.
+    use pretty_assertions::assert_eq;
+
     pub fn assert_partial_parse_with<T, F>(partial: bool, source: &str, op: F)
     where
         T: Parse,
         F: FnOnce(T, Interner) -> (),
     {
         let (ast, interner) = T::partial_parse(partial, source, 0).unwrap_or_else(|err| {
-            panic!("errors parsing source: {:#?}", err);
+            panic!(
+                "errors parsing source:```\n{}\n```\nerrors: {:#?}",
+                source, err
+            );
         });
         op(ast, interner);
     }

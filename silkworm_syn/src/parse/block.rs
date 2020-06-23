@@ -8,49 +8,102 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = Token>,
 {
-    pub fn parse_block(&mut self, _term: T) -> PResult<'a, ast::Block> {
-        unimplemented!()
+    /// Parse a block with a terminator without consuming it.
+    pub fn parse_block(&mut self, term: T) -> PResult<'a, ast::Block> {
+        let span = self.token.span.empty();
+
+        let mut pragmas = Vec::new();
+        while let Some(style) = self.check_pragma() {
+            if let Ok(pragma) = self.parse_pragma_line() {
+                if style == PragmaStyle::Inner {
+                    pragmas.push(pragma);
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let mut stmts = Vec::new();
+        while !self.is_eof() && !self.check(term) {
+            stmts.extend(self.parse_or_eat_till(term, Self::parse_stmt).ok());
+
+            if self.eat(T::LineBreak).is_none() {
+                self.expect(T::LineBreak);
+            }
+        }
+
+        if self.is_eof() {
+            self.expect(term);
+        }
+
+        let span = span.union(self.token.span);
+
+        Ok(ast::Block {
+            span,
+            inner_pragmas: pragmas,
+            stmts,
+        })
     }
 
+    /// Parse a full statement, without consuming the line-break.
     pub fn parse_stmt(&mut self) -> PResult<'a, ast::Stmt> {
         let mut pragmas = Vec::new();
-        while self.check(T::Pragma(PragmaStyle::Outer)) {
-            pragmas.push(self.parse_pragma()?);
+        while let Some(style) = self.check_pragma() {
+            if let Ok(pragma) = self.parse_pragma_line() {
+                if style == PragmaStyle::Outer {
+                    pragmas.push(pragma);
+                } else {
+                    self.ctx
+                        .errors
+                        .error("inner pragmas are only allowed at start of blocks")
+                        .span(pragma.span);
+                }
+            }
         }
 
         let body = self.parse_stmt_body()?;
 
         let decorator_command = self
             .eat(T::OpenDelim(Delim::DoubleAngleBracket))
-            .map(|_| {
-                let command = self.parse_command()?;
+            .and_then(|_| {
+                let command = self.parse_command().ok()?;
                 if self.eat(T::CloseDelim(Delim::DoubleAngleBracket)).is_none() {
-                    return Err(self.expect(T::CloseDelim(Delim::DoubleAngleBracket)));
+                    self.expect(T::CloseDelim(Delim::DoubleAngleBracket));
+                    return None;
                 }
-                Ok(command)
-            })
-            .transpose()?;
+                Some(command)
+            });
 
         let mut hashtags = Vec::new();
         while self.check(T::Hash) {
-            hashtags.push(self.parse_hashtag()?);
+            hashtags.extend(self.parse_hashtag().ok());
         }
 
-        if self.eat(T::LineBreak).is_none() {
-            return Err(self.expect(T::LineBreak));
+        if !self.is_eof() && !self.check(T::LineBreak) {
+            let span = self.eat_until_end_of_line();
+            self.expect(T::LineBreak)
+                .maybe_annotate_span(span, "extra tokens in statement");
         }
 
-        let associated_block = self
-            .eat(T::Indent)
-            .map(|_| {
-                let block = self.parse_block(T::UnIndent)?;
-                if self.eat(T::UnIndent).is_none() {
-                    return Err(self.expect(T::UnIndent));
+        let associated_block = if Some(true) == self.check_nth(0, T::Whitespace)
+            && Some(true) == self.check_nth(1, T::Indent)
+        {
+            self.eat(T::LineBreak)
+                .expect("the code above should guarantee a line-break");
+            self.eat(T::Indent)
+                .expect("the code above should guarantee an indent");
+
+            self.parse_block(T::UnIndent).ok().and_then(|block| {
+                if self.eat(T::UnIndent).is_some() {
+                    Some(block)
+                } else {
+                    self.expect(T::UnIndent);
+                    None
                 }
-                let _ = self.eat(T::LineBreak);
-                Ok(block)
             })
-            .transpose()?;
+        } else {
+            None
+        };
 
         Ok(ast::Stmt {
             pragmas,
@@ -189,8 +242,10 @@ where
         F: FnOnce(P<ast::Expr>) -> ast::CommandKind,
     {
         let span = self.bump().span;
+
         let expr =
             self.parse_or_eat_till(T::CloseDelim(Delim::DoubleAngleBracket), Self::parse_expr)?;
+
         Ok(ast::Command {
             span: span.union(expr.span),
             kind: ctor(P(expr)),
@@ -299,6 +354,35 @@ mod tests {
     use crate::parse::Parse;
 
     #[test]
+    fn can_parse_stmt() {
+        assert_parse(
+            concat!(
+                "//# foo(bar)\n",
+                "-> Foo <<if $foo is $bar>>\n",
+                "    <<call foo()>>\n",
+            ),
+            |itn| ast::Stmt {
+                pragmas: vec![ast::Pragma::parse_with_interner("//# foo(bar)", 0, itn).unwrap()],
+                body: ast::StmtBody {
+                    span: Span::new(13, 7),
+                    kind: ast::StmtKind::ShortcutOption(
+                        ast::ShortcutOption::parse_with_interner("-> Foo ", 13, itn).unwrap(),
+                    ),
+                },
+                decorator_command: Some(
+                    ast::Command::parse_with_interner("if $foo is $bar", 22, itn).unwrap(),
+                ),
+                hashtags: Vec::new(),
+                associated_block: Some(ast::Block {
+                    span: Span::new(44, 15),
+                    inner_pragmas: Vec::new(),
+                    stmts: vec![ast::Stmt::parse_with_interner("<<call foo()>>", 44, itn).unwrap()],
+                }),
+            },
+        );
+    }
+
+    #[test]
     fn can_parse_hashtag() {
         assert_parse("#foo: bar", |_itn| ast::Hashtag {
             span: Span::new(0, 9),
@@ -366,7 +450,7 @@ mod tests {
             ),
             span: Span::new(0, 16),
         });
-        
+
         ast::Path::parse("expression {1+", 0).unwrap_err();
     }
 

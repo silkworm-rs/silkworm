@@ -48,8 +48,11 @@ impl Debug for Error {
             level = self.level,
             msg = &self.msg
         )?;
-        if let Some(span) = self.span() {
-            writeln!(f, "        at raw position: {:?}", span)?;
+        if let Some(span) = self.span.as_ref() {
+            writeln!(f, "        at raw position: {:?}", span.main)?;
+            for (span, annotation) in &span.annotations {
+                writeln!(f, "        annotation: {} - {:?}", annotation, span)?;
+            }
         }
         if let Some(backtrace) = self.backtrace() {
             let mut backtrace = backtrace.clone();
@@ -124,5 +127,21 @@ impl ErrorBuilder {
         let error_span = self.error.span.get_or_insert_with(|| ErrorSpan::new(span));
         error_span.annotate(span, msg);
         self
+    }
+
+    pub fn maybe_annotate_span<S: Display>(&mut self, span: Option<Span>, msg: S) -> &mut Self {
+        self.maybe_annotate_span_with(span, move || msg)
+    }
+
+    pub fn maybe_annotate_span_with<F, S>(&mut self, span: Option<Span>, msg: F) -> &mut Self
+    where
+        F: FnOnce() -> S,
+        S: Display,
+    {
+        if let Some(span) = span {
+            self.annotate_span(span, msg())
+        } else {
+            self
+        }
     }
 }

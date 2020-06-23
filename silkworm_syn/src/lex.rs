@@ -160,7 +160,7 @@ pub struct LexStream<'a> {
     pos: u32,
 
     fatal: bool,
-    eof_emitted: bool,
+    eof_emitted: EofState,
 
     block_mode: BlockMode,
     inline_stack: ArrayVec<[InlineMode; MODE_STACK_CAPACITY]>,
@@ -169,6 +169,13 @@ pub struct LexStream<'a> {
     current_line_indent: u32,
 
     delayed: Option<Token>,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum EofState {
+    NotEmitted,
+    LastUnIndentEmitted,
+    Emitted,
 }
 
 impl<'a> LexStream<'a> {
@@ -194,7 +201,7 @@ impl<'a> LexStream<'a> {
             pos,
 
             fatal: false,
-            eof_emitted: false,
+            eof_emitted: EofState::NotEmitted,
 
             block_mode,
             inline_stack,
@@ -221,6 +228,34 @@ impl<'a> LexStream<'a> {
         self.inline_stack
             .try_push(mode)
             .map_err(|_| ErrorKind::StackTooDeep)
+    }
+
+    fn delay_token(&mut self, token: Token, new_kind: token::Kind) -> Token {
+        if let Some(other_delayed) = self.delayed.replace(token) {
+            panic!("already delayed token: {:?}", other_delayed);
+        }
+
+        let mut token = token;
+        token.kind = new_kind;
+        token.span.len = 0;
+
+        token
+    }
+
+    fn indent_token(&mut self, current_token: Token) -> Option<Token> {
+        use std::cmp::Ordering;
+
+        let kind = match self.current_line_indent.cmp(&self.last_indent) {
+            Ordering::Greater => Some(token::Kind::Indent),
+            Ordering::Less => Some(token::Kind::UnIndent),
+            Ordering::Equal => None,
+        };
+
+        kind.map(|kind| {
+            let token = self.delay_token(current_token, kind);
+            self.last_indent = self.current_line_indent;
+            token
+        })
     }
 }
 
@@ -249,11 +284,16 @@ impl<'a> Iterator for LexStream<'a> {
         }
 
         if self.src.is_empty() {
-            if self.eof_emitted {
-                return None;
-            } else {
-                self.eof_emitted = true;
-                return Some(Ok(Token::new(T::Eof, Span::new(self.pos, 0))));
+            match self.eof_emitted {
+                EofState::NotEmitted if self.last_indent > 0 => {
+                    self.eof_emitted = EofState::LastUnIndentEmitted;
+                    return Some(Ok(Token::new(T::UnIndent, Span::new(self.pos, 0))));
+                }
+                EofState::NotEmitted | EofState::LastUnIndentEmitted => {
+                    self.eof_emitted = EofState::Emitted;
+                    return Some(Ok(Token::new(T::Eof, Span::new(self.pos, 0))));
+                }
+                EofState::Emitted => return None,
             }
         }
 
@@ -397,21 +437,7 @@ impl<'a> Iterator for LexStream<'a> {
         if inline_mode == InlineMode::StartOfLine {
             if let Some(new_mode) = self.inline_stack.last().copied() {
                 if new_mode != inline_mode {
-                    if self.current_line_indent > self.last_indent {
-                        self.delayed = Some(token);
-                        let mut token = token;
-                        token.kind = T::Indent;
-                        token.span.len = 0;
-
-                        self.last_indent = self.current_line_indent;
-                        return Some(Ok(token));
-                    } else if self.current_line_indent < self.last_indent {
-                        self.delayed = Some(token);
-                        let mut token = token;
-                        token.kind = T::UnIndent;
-                        token.span.len = 0;
-
-                        self.last_indent = self.current_line_indent;
+                    if let Some(token) = self.indent_token(token) {
                         return Some(Ok(token));
                     }
                 }
@@ -472,6 +498,8 @@ mod tests {
 
         let mut has_unknowns = false;
 
+        let mut indent_pairing = 0;
+
         for token in LexStream::new(code, 0).take(1000) {
             let token = token.expect("should raise no internal errors");
 
@@ -486,9 +514,11 @@ mod tests {
                     print!("{}", spanned_code);
                 }
                 T::Indent => {
+                    indent_pairing += 1;
                     print!("<IDT> ");
                 }
                 T::UnIndent => {
+                    indent_pairing -= 1;
                     print!("<UDT> ");
                 }
                 _ => {
@@ -499,6 +529,10 @@ mod tests {
                     print!("{} ({:?}) ", spanned_code, token.kind);
                 }
             }
+        }
+
+        if indent_pairing != 0 {
+            panic!("indent unbalanced");
         }
 
         if has_unknowns {

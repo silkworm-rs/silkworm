@@ -40,6 +40,27 @@ where
         })
     }
 
+    /// Parse pragma lines consuming the terminator symbol
+    pub fn parse_pragma_line(&mut self) -> PResult<'a, ast::Pragma> {
+        let pragma = self.parse_pragma();
+
+        if self.eat(T::LineBreak).is_none() {
+            let span = self.eat_until_end_of_line();
+            self.expect(T::LineBreak)
+                .maybe_annotate_span(span, "expected meta list");
+
+            if self.eat(T::LineBreak).is_none() {
+                return Err(self
+                    .ctx
+                    .errors
+                    .error("expected statement")
+                    .span(self.token.span));
+            }
+        }
+
+        pragma
+    }
+
     pub fn parse_meta(&mut self) -> PResult<'a, ast::Meta> {
         let path = self.parse_path()?;
 
