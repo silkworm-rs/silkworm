@@ -38,9 +38,9 @@ pub enum InlineMode {
     Meta,
     /// Between `<<` and `>>`.
     Command,
-    /// Right after `[[`., before `->`, `|`, or `|>`.
+    /// Right after `[[`., before `|`.
     OptionTextOrTarget,
-    /// Between `[[` and `]]`, after `->`, `|`, or `|>`.
+    /// Between `[[` and `]]`, after `|`.
     OptionTarget,
     /// Between `[` and `]`.
     FormatFunction,
@@ -367,7 +367,7 @@ impl<'a> Iterator for LexStream<'a> {
                     _ => C::Keep,
                 },
 
-                T::Pipe | T::PipeArrow => {
+                T::Pipe => {
                     if inline_mode == I::OptionTextOrTarget {
                         C::Replace(I::OptionTarget)
                     } else {
@@ -490,9 +490,9 @@ mod tests {
             <<set $private = $title is not $special>>
 
             [[Wow.Wow]] # foo // bar
-            [[-> Wow.Wow]] # foo // bar
+            [[Wow.Wow(Fish, Life)]] # foo // bar
             [[Wow wow | Fish.Life]] # foo // bar
-            [[Wow wow |> Fish.Life]] # foo // bar
+            [[Wow wow | Fish.Life()]] # foo // bar
             ===
         "#;
 

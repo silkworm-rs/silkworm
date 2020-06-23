@@ -275,7 +275,6 @@ where
     }
 
     fn parse_custom_command(&mut self) -> PResult<'a, ast::Command> {
-        use super::{Parse, ParseCtx};
         use crate::lex;
 
         // re-interpret tokens as string
@@ -294,44 +293,23 @@ where
                 .span(self.token.span)
         })?;
 
-        let source = span.read(self.ctx.source, self.ctx.span_base);
-
-        let errors = self.ctx.errors;
-
-        let ctx = ParseCtx {
-            errors,
-            interner: &mut self.ctx.interner,
-            source,
-            span_base: span.base,
-        };
-
-        let lex_stream = lex::LexStream::with_modes(
-            source,
-            span.base,
-            lex::BlockMode::Body,
-            lex::InlineMode::InterpolatedStringLiteral,
-        );
-
-        let str_body = ast::StrBody::parse_with_ctx(
-            ctx,
-            lex_stream.filter_map(|result| match result {
-                Ok(tok) => Some(tok),
-                Err(err) => {
-                    errors.bug(format!("fatal lexer error: {}", err));
-                    None
-                }
-            }),
-        )
-        .map_err(|_| errors.error("invalid custom command body").span(span))?;
+        let str_body = self
+            .parse_reinterpret(
+                span,
+                lex::BlockMode::Body,
+                lex::InlineMode::InterpolatedStringLiteral,
+            )
+            .map_err(|_| {
+                self.ctx
+                    .errors
+                    .error("invalid custom command body")
+                    .span(span)
+            })?;
 
         Ok(ast::Command {
             span,
             kind: ast::CommandKind::Custom(str_body),
         })
-    }
-
-    pub fn parse_flow(&mut self) -> PResult<'a, ast::Flow> {
-        unimplemented!()
     }
 
     fn parse_stmt_text_body(&mut self) -> PResult<'a, ast::StrBody> {
@@ -341,6 +319,84 @@ where
         })?;
 
         Ok(str_body)
+    }
+
+    pub fn parse_flow(&mut self) -> PResult<'a, ast::Flow> {
+        // Need to re-interpret tokens depending on the presence and position of `|`.
+        let mut text_span = None;
+        while self.token.kind != T::Pipe && self.token.kind != T::CloseDelim(Delim::DoubleBracket) {
+            let text_span = text_span.get_or_insert(self.token.span);
+            *text_span = text_span.union(self.token.span);
+            self.bump();
+        }
+
+        let target_span = {
+            if self.token.kind == T::CloseDelim(Delim::DoubleBracket) {
+                text_span.take()
+            } else {
+                self.bump();
+
+                let mut target_span = None;
+                while self.token.kind != T::CloseDelim(Delim::DoubleBracket) {
+                    let target_span = target_span.get_or_insert(self.token.span);
+                    *target_span = target_span.union(self.token.span);
+                    self.bump();
+                }
+
+                target_span
+            }
+        };
+
+        let (target_span, span) = if let Some(span) = target_span {
+            if let Some(text_span) = text_span {
+                (span, span.union(text_span))
+            } else {
+                (span, span)
+            }
+        } else {
+            return Err(self
+                .ctx
+                .errors
+                .error("expecting flow command body")
+                .span(self.token.span.empty()));
+        };
+
+        let option_text = text_span.and_then(|span| {
+            match self.parse_reinterpret(
+                span,
+                crate::lex::BlockMode::Body,
+                crate::lex::InlineMode::InterpolatedStringLiteral,
+            ) {
+                Ok(str_body) => Some(str_body),
+                Err(_) => {
+                    self.ctx.errors.error("invalid option text").span(span);
+                    None
+                }
+            }
+        });
+
+        let target = self
+            .parse_reinterpret(
+                target_span,
+                crate::lex::BlockMode::Body,
+                crate::lex::InlineMode::OptionTarget,
+            )
+            .map_err(|_| {
+                self.ctx
+                    .errors
+                    .error("invalid flow target")
+                    .span(target_span)
+            })?;
+
+        Ok(ast::Flow {
+            span,
+            option_text,
+            target,
+        })
+    }
+
+    pub fn parse_flow_target(&mut self) -> PResult<'a, ast::FlowTarget> {
+        unimplemented!()
     }
 }
 

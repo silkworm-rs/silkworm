@@ -405,8 +405,6 @@ pub enum Kind {
     Arrow,
     /// `|`
     Pipe,
-    /// `|>`
-    PipeArrow,
     /// Hash symbol `#`
     Hash,
     /// `---`
@@ -523,7 +521,6 @@ impl fmt::Display for Kind {
             K::Period => write!(f, "'.'"),
             K::Arrow => write!(f, "->"),
             K::Pipe => write!(f, "|"),
-            K::PipeArrow => write!(f, "|>"),
             K::Hash => write!(f, "#"),
             K::TripleDash => write!(f, "---"),
             K::TripleEq => write!(f, "==="),

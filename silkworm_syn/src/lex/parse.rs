@@ -246,12 +246,7 @@ impl<'a> Cursor<'a> {
                         }
                     }
                     '|' => {
-                        if next == '>' {
-                            self.bump();
-                            return T::PipeArrow;
-                        } else {
-                            return T::Pipe;
-                        }
+                        return T::Pipe;
                     }
                     ']' => {
                         if next == ']' {
@@ -332,10 +327,6 @@ impl<'a> Cursor<'a> {
                     '|' => {
                         self.bump();
                         T::OrOr
-                    }
-                    '>' => {
-                        self.bump();
-                        T::PipeArrow
                     }
                     _ => T::Pipe,
                 },

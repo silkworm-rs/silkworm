@@ -62,7 +62,7 @@ Users may also declare and use node-scoped variables with the `@` sigil, or file
 
 Enabled by default. Requires `scoped_variables`.
 
-Users may declare subroutines using the [`sub` pragma](pragmas.md#sub) on a node. The `return` instruction becomes special. Users may call subroutines using the `[[->]]` and `[[|>]]` instructions. Content after the call will be run after the called node ends or returns.
+Users may declare subroutines using the [`sub` pragma](pragmas.md#sub) on a node. The `return` instruction becomes special. Users may call subroutines by adding arguments list or using the `set` command in the target. Content after the call will be run after the called node ends or returns.
 
 Subroutines cannot be called in expressions.
 
@@ -82,26 +82,26 @@ Hello, {person_name}!
 //# sub
 title: hello_world
 ---
-[[> set is_grandiose to greet("World")]]
+[[set is_grandiose to greet("World")]]
 <<return is_grandiose>>
 ===
 ```
 
 To call them, use the subroutine variants of option and jump instructions:
 
-- `[[-> sub_name(arg, ..)]]`
+- `[[sub_name(arg, ..)]]`
 
     Call `sub_name` unconditionally. Discard the return value.
 
-- `[[-> set ret to sub_name(arg, ..)]]`
+- `[[set ret to sub_name(arg, ..)]]`
 
     Call `sub_name` unconditionally. Set the value of `ret` to the return value.
 
-- `[[Option |> sub_name(arg, ..)]]`
+- `[[Option | sub_name(arg, ..)]]`
 
     Call `sub_name` if `Option` is chosen. Discard the return value.
 
-- `[[Option |> set ret to sub_name(arg, ..)]]`
+- `[[Option | set ret to sub_name(arg, ..)]]`
 
     Call `sub_name` if `Option` is chosen. Set the value of `ret` to the return value.
 
@@ -113,11 +113,11 @@ title: intro
 What's your name?
 
 // Use set to take the return value of a subroutine.
-[[Jane Roe |> set is_grandiose to greet("Jane Roe")]]
-// The parens may be omitted if the argument list is empty.
-[[World |> set is_grandiose to hello_world]]
+[[Jane Roe | set is_grandiose to greet("Jane Roe")]]
+// The parens must be added even if the argument list is empty.
+[[World | set is_grandiose to hello_world()]]
 // Return values of subroutines maybe ignored.
-[[...(say nothing) |> produce_error]]
+[[...(say nothing) | produce_error()]]
 
 <<if is_grandiose>>
     One with a lot of self-importance, aren't you?
@@ -133,7 +133,7 @@ What's your name?
 title: produce_error
 ---
 // The runtime will produce an error in case of argument count mismatch
-[[-> greet()]]
+[[greet()]]
 ===
 ```
 

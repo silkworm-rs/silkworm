@@ -204,6 +204,37 @@ where
         })
     }
 
+    fn parse_reinterpret<P: Parse>(
+        &mut self,
+        span: Span,
+        block_mode: lex::BlockMode,
+        inline_mode: lex::InlineMode,
+    ) -> Result<P, ()> {
+        let source = span.read(self.ctx.source, self.ctx.span_base);
+
+        let errors = self.ctx.errors;
+
+        let ctx = ParseCtx {
+            errors,
+            interner: &mut self.ctx.interner,
+            source,
+            span_base: span.base,
+        };
+
+        let lex_stream = lex::LexStream::with_modes(source, span.base, block_mode, inline_mode);
+
+        P::parse_with_ctx(
+            ctx,
+            lex_stream.filter_map(|result| match result {
+                Ok(tok) => Some(tok),
+                Err(err) => {
+                    errors.bug(format!("fatal lexer error: {}", err));
+                    None
+                }
+            }),
+        )
+    }
+
     /// Peeks the nth token *after* the current token. Returns `None` if beyond EOF.
     fn peek_nth(&mut self, n: usize) -> Option<Token> {
         self.token_stream.peek_nth(n)
@@ -582,11 +613,6 @@ impl_parse! {
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Command;
         [ .. ]
     }
-    impl Parse for ast::Flow => parse_flow {
-        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
-        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::OptionTextOrTarget;
-        [ .. ]
-    }
     impl Parse for ast::ShortcutOption => parse_shortcut_option {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
@@ -595,6 +621,16 @@ impl_parse! {
     impl Parse for ast::Hashtag => parse_hashtag {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Hashtag;
+        [ .. ]
+    }
+    impl Parse for ast::Flow => parse_flow {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::OptionTextOrTarget;
+        [ .. ]
+    }
+    impl Parse for ast::FlowTarget => parse_flow_target {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::OptionTarget;
         [ .. ]
     }
 }

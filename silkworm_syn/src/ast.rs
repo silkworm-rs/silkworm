@@ -329,9 +329,21 @@ pub enum StmtKind {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Flow {
     pub span: Span,
-    pub is_subroutine: bool,
     pub option_text: Option<StrBody>,
+    pub target: FlowTarget,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum FlowTarget {
+    Path(Path),
+    SubRoutine(FlowTargetSubRoutine),
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct FlowTargetSubRoutine {
+    pub result: Option<Var>,
     pub target: Path,
+    pub arguments: Vec<P<Expr>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
