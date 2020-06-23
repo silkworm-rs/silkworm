@@ -7,7 +7,7 @@ silkworm is an implementation of the [Yarn](https://github.com/YarnSpinnerTool/Y
 **silkworm is currently in the initial development phase. Any and all features advertised might not be implemented yet!**
 
 - [x] Lexer
-- [ ] Parser
+- [x] Parser
 - [ ] Runtime
   - [ ] Source map
   - [ ] IR definition, AST validation and lowering

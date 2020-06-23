@@ -1,6 +1,6 @@
 [package]
 name = "silkworm_err"
-version = "0.1.0-dev.0"
+version = "0.1.0-dev.1"
 authors = ["The silkworm developers"]
 edition = "2018"
 description = "Compiler diagnostics for silkworm."
@@ -12,6 +12,6 @@ license = "MIT"
 maintenance = { status = "experimental" }
 
 [dependencies]
-silkworm_sourcemap = { version = "0.1.0-dev.0", path = "../silkworm_sourcemap" }
+silkworm_sourcemap = { version = "0.1.0-dev.1", path = "../silkworm_sourcemap" }
 typed-arena = "2.0"
 backtrace = "0.3"
