@@ -41,16 +41,16 @@ where
         use ast::BinOpKind as O;
 
         let bin_op = match self.token.kind {
-            T::EqEq => Some(O::Eq),
-            T::Neq => Some(O::Neq),
-            T::Lt => Some(O::Lt),
-            T::Lte => Some(O::Lte),
-            T::Gt => Some(O::Gt),
-            T::Gte => Some(O::Gte),
+            T::EqEq | T::Keyword(Keyword::Is) | T::Keyword(Keyword::Eq) => Some(O::Eq),
+            T::Neq | T::Keyword(Keyword::Neq) => Some(O::Neq),
+            T::Lt | T::Keyword(Keyword::Lt) => Some(O::Lt),
+            T::Lte | T::Keyword(Keyword::Lte) => Some(O::Lte),
+            T::Gt | T::Keyword(Keyword::Gt) => Some(O::Gt),
+            T::Gte | T::Keyword(Keyword::Gte) => Some(O::Gte),
 
-            T::AndAnd => Some(O::And),
-            T::OrOr => Some(O::Or),
-            T::Xor => Some(O::Xor),
+            T::AndAnd | T::Keyword(Keyword::And) => Some(O::And),
+            T::OrOr | T::Keyword(Keyword::Or) => Some(O::Or),
+            T::Xor | T::Keyword(Keyword::Xor) => Some(O::Xor),
 
             T::BinOp(BinOp::Plus) => Some(O::Add),
             T::BinOp(BinOp::Minus) => Some(O::Sub),
@@ -58,7 +58,7 @@ where
             T::BinOp(BinOp::Slash) => Some(O::Div),
             T::BinOp(BinOp::Percent) => Some(O::Mod),
 
-            T::Eq => Some(O::Assign),
+            T::Eq | T::Keyword(Keyword::To) => Some(O::Assign),
             T::BinOpEq(BinOp::Plus) => Some(O::AddAssign),
             T::BinOpEq(BinOp::Minus) => Some(O::SubAssign),
             T::BinOpEq(BinOp::Star) => Some(O::MulAssign),
@@ -74,7 +74,7 @@ where
     pub fn parse_unary_expr_or_higher(&mut self) -> PResult<'a, ast::Expr> {
         let (kind, span) = match self.token.kind {
             T::BinOp(BinOp::Minus) => (ast::UnOpKind::Neg, self.bump().span),
-            T::Not => (ast::UnOpKind::Not, self.bump().span),
+            T::Not | T::Keyword(Keyword::Not) => (ast::UnOpKind::Not, self.bump().span),
             _ => {
                 return {
                     if let Ok(expr) = self.parse_call_expr_or_atom() {
@@ -403,7 +403,7 @@ mod tests {
             span: Span::new(0, 5),
         });
 
-        assert_parse("$foo = bar(42, 1 + 2 + @@baz(quux, )) || false", |itn| {
+        assert_parse("$foo = bar(42, 1 + 2 + @@baz(quux, )) or false", |itn| {
             ast::Expr {
                 kind: ast::ExprKind::Binary(
                     ast::BinOp {
