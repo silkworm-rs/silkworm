@@ -1,5 +1,4 @@
 use crate::ast;
-use crate::ptr::P;
 use crate::token::{Delim, Kind as T, PragmaStyle as Style, Token};
 use crate::Span;
 

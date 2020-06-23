@@ -281,16 +281,6 @@ where
         self.peek_nth(n).map(|tok| tok.kind == kind)
     }
 
-    /// Checks if the current token or the next token is of `kind`. Returns `None` if
-    /// the current token is not `kind` and the next token is beyond EOF.
-    fn check_or_next(&mut self, kind: TokenKind) -> Option<bool> {
-        if self.check(kind) {
-            Some(true)
-        } else {
-            self.check_nth(0, kind)
-        }
-    }
-
     fn expect(&mut self, kind: TokenKind) -> &'a mut ErrorBuilder {
         self.expect_one_of(&[kind])
     }
@@ -708,14 +698,6 @@ mod test_utils {
             );
         });
         op(ast, interner);
-    }
-
-    pub fn assert_parse_with<T, F>(source: &str, op: F)
-    where
-        T: Parse,
-        F: FnOnce(T, Interner) -> (),
-    {
-        assert_partial_parse_with(false, source, op)
     }
 
     pub fn assert_partial_parse<T, F>(partial: bool, source: &str, expected: F)

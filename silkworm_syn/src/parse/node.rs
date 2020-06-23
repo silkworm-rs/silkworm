@@ -1,6 +1,5 @@
 use crate::ast;
-use crate::ptr::P;
-use crate::token::{BinOp, Delim, HeaderKey as H, Keyword as K, Kind as T, PragmaStyle, Token};
+use crate::token::{HeaderKey as H, Keyword as K, Kind as T, Token};
 
 use super::{PResult, Parser};
 
