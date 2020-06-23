@@ -1,6 +1,7 @@
 use crate::ast;
 use crate::ptr::P;
 use crate::token::{BinOp, Delim, Keyword, Kind as T, Token};
+use crate::Span;
 
 use super::{PResult, Parser};
 
@@ -99,11 +100,21 @@ where
     pub fn parse_call_expr_or_atom(&mut self) -> PResult<'a, ast::Expr> {
         let receiver = self.parse_atom()?;
 
-        if self.eat(T::OpenDelim(Delim::Paren)).is_none() {
-            return Ok(receiver);
-        }
+        let (args, span) = match self.parse_call_arg_list() {
+            Some(tup) => tup,
+            None => return Ok(receiver),
+        };
 
-        let (args, span) = self.parse_list_with(
+        Ok(ast::Expr {
+            span: receiver.span.union(span),
+            kind: ast::ExprKind::Call(P(receiver), args),
+        })
+    }
+
+    pub fn parse_call_arg_list(&mut self) -> Option<(Vec<ast::Expr>, Span)> {
+        self.eat(T::OpenDelim(Delim::Paren))?;
+
+        Some(self.parse_list_with(
             true,
             super::list::parse_list_sep_with_term(true, T::Comma, T::CloseDelim(Delim::Paren)),
             |p, span| {
@@ -111,12 +122,7 @@ where
                     .span(span);
             },
             |p| p.parse_expr().ok(),
-        );
-
-        Ok(ast::Expr {
-            span: receiver.span.union(span),
-            kind: ast::ExprKind::Call(P(receiver), args),
-        })
+        ))
     }
 
     pub fn parse_atom(&mut self) -> PResult<'a, ast::Expr> {

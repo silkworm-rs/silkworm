@@ -337,13 +337,16 @@ pub struct Flow {
 pub enum FlowTarget {
     Path(Path),
     SubRoutine(FlowTargetSubRoutine),
+    /// A `set $foo = subroutine()` target. The first element is the full span of the `set`
+    /// "command".
+    SubRoutineSet(Span, Var, FlowTargetSubRoutine),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct FlowTargetSubRoutine {
-    pub result: Option<Var>,
-    pub target: Path,
-    pub arguments: Vec<P<Expr>>,
+    pub span: Span,
+    pub path: Path,
+    pub arguments: Vec<Expr>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

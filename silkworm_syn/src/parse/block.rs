@@ -324,20 +324,23 @@ where
     pub fn parse_flow(&mut self) -> PResult<'a, ast::Flow> {
         // Need to re-interpret tokens depending on the presence and position of `|`.
         let mut text_span = None;
-        while self.token.kind != T::Pipe && self.token.kind != T::CloseDelim(Delim::DoubleBracket) {
+        while !self.is_eof()
+            && self.token.kind != T::Pipe
+            && self.token.kind != T::CloseDelim(Delim::DoubleBracket)
+        {
             let text_span = text_span.get_or_insert(self.token.span);
             *text_span = text_span.union(self.token.span);
             self.bump();
         }
 
         let target_span = {
-            if self.token.kind == T::CloseDelim(Delim::DoubleBracket) {
+            if self.is_eof() || self.token.kind == T::CloseDelim(Delim::DoubleBracket) {
                 text_span.take()
             } else {
                 self.bump();
 
                 let mut target_span = None;
-                while self.token.kind != T::CloseDelim(Delim::DoubleBracket) {
+                while !self.is_eof() && self.token.kind != T::CloseDelim(Delim::DoubleBracket) {
                     let target_span = target_span.get_or_insert(self.token.span);
                     *target_span = target_span.union(self.token.span);
                     self.bump();
@@ -396,7 +399,61 @@ where
     }
 
     pub fn parse_flow_target(&mut self) -> PResult<'a, ast::FlowTarget> {
-        unimplemented!()
+        match self.token.kind {
+            T::Keyword(K::Set) => self.parse_flow_target_set(),
+            T::Ident => self.parse_flow_target_body(),
+            _ => Err(self.expect_one_of(&[T::Keyword(K::Set), T::Ident])),
+        }
+    }
+
+    fn parse_flow_target_body(&mut self) -> PResult<'a, ast::FlowTarget> {
+        let path = self.parse_path()?;
+
+        let (args, span) = match self.parse_call_arg_list() {
+            Some(tup) => tup,
+            None => return Ok(ast::FlowTarget::Path(path)),
+        };
+
+        let span = path.span.union(span);
+
+        Ok(ast::FlowTarget::SubRoutine(ast::FlowTargetSubRoutine {
+            span,
+            path,
+            arguments: args,
+        }))
+    }
+
+    fn parse_flow_target_set(&mut self) -> PResult<'a, ast::FlowTarget> {
+        let span = self
+            .eat(T::Keyword(K::Set))
+            .map(|tok| tok.span)
+            .ok_or_else(|| self.expect(T::Keyword(K::Set)))?;
+
+        let var = self.parse_var()?;
+
+        match self.token.kind {
+            T::Eq | T::Keyword(K::To) => {
+                self.bump();
+            }
+            _ => return Err(self.expect_one_of(&[T::Eq, T::Keyword(K::To)])),
+        }
+
+        let target = self.parse_flow_target_body()?;
+
+        match target {
+            ast::FlowTarget::SubRoutine(target) => {
+                let span = span.union(target.span);
+                Ok(ast::FlowTarget::SubRoutineSet(span, var, target))
+            }
+            ast::FlowTarget::Path(path) => Err(self
+                .ctx
+                .errors
+                .error("expecting a subroutine target with an argument list")
+                .span(path.span)),
+            ast::FlowTarget::SubRoutineSet(..) => {
+                unreachable!("parse_flow_target_body is unable to parse this variant")
+            }
+        }
     }
 }
 
@@ -532,6 +589,53 @@ mod tests {
         assert_parse("endif", |_itn| ast::Command {
             kind: ast::CommandKind::EndIf,
             span: Span::new(0, 5),
+        });
+    }
+
+    #[test]
+    fn can_parse_flow() {
+        assert_parse("wow wow | fish.life", |itn| ast::Flow {
+            span: Span::new(0, 19),
+            option_text: Some(ast::StrBody::parse_with_interner("wow wow ", 0, itn).unwrap()),
+            target: ast::FlowTarget::Path(
+                ast::Path::parse_with_interner("fish.life", 10, itn).unwrap(),
+            ),
+        });
+
+        assert_parse("fish.life", |itn| ast::Flow {
+            span: Span::new(0, 9),
+            option_text: None,
+            target: ast::FlowTarget::Path(
+                ast::Path::parse_with_interner("fish.life", 0, itn).unwrap(),
+            ),
+        });
+
+        assert_parse("fish.life($foo + $bar)", |itn| ast::Flow {
+            span: Span::new(0, 22),
+            option_text: None,
+            target: ast::FlowTarget::SubRoutine(ast::FlowTargetSubRoutine {
+                span: Span::new(0, 22),
+                path: ast::Path::parse_with_interner("fish.life", 0, itn).unwrap(),
+                arguments: vec![ast::Expr::parse_with_interner("$foo + $bar", 10, itn).unwrap()],
+            }),
+        });
+
+        assert_parse("wow wow | set $wow = fish.life($foo + $bar)", |itn| {
+            ast::Flow {
+                span: Span::new(0, 43),
+                option_text: Some(ast::StrBody::parse_with_interner("wow wow ", 0, itn).unwrap()),
+                target: ast::FlowTarget::SubRoutineSet(
+                    Span::new(10, 33),
+                    ast::Var::parse_with_interner("$wow", 14, itn).unwrap(),
+                    ast::FlowTargetSubRoutine {
+                        span: Span::new(21, 22),
+                        path: ast::Path::parse_with_interner("fish.life", 0, itn).unwrap(),
+                        arguments: vec![
+                            ast::Expr::parse_with_interner("$foo + $bar", 31, itn).unwrap()
+                        ],
+                    },
+                ),
+            }
         });
     }
 }
