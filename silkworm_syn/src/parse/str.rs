@@ -252,10 +252,7 @@ where
         let (args, args_span) = self.parse_list_with(
             true,
             |p| {
-                if p.check(T::CloseDelim(Delim::Bracket))
-                    || p.check(T::Eof)
-                    || p.check(T::LineBreak)
-                {
+                if p.check(T::CloseDelim(Delim::Bracket)) || p.is_end_of_line() {
                     Some(ListSep::Term)
                 } else if p.check(T::Number) || p.check(T::Ident) {
                     Some(ListSep::Sep)

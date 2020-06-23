@@ -21,7 +21,11 @@ where
             },
             |_, _| panic!("sep should never fail"),
             |p| match p.eat_symbol() {
-                Some((symbol, span)) => Some(ast::PathSegment { symbol, span }),
+                Some((symbol, keyword, span)) => Some(ast::PathSegment {
+                    symbol,
+                    keyword,
+                    span,
+                }),
                 None => {
                     let builder = p.expect(T::Ident);
                     if p.last_token.kind == T::Period {

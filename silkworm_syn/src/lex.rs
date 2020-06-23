@@ -131,7 +131,11 @@ impl KeywordClass {
         match self {
             KeywordClass::Used | KeywordClass::Reserved => true,
             KeywordClass::HeaderKey => {
-                block_mode == BlockMode::Header && inline_mode == InlineMode::StartOfLine
+                block_mode == BlockMode::Header
+                    && match inline_mode {
+                        InlineMode::StartOfLine | InlineMode::HeaderKey => true,
+                        _ => false,
+                    }
             }
             KeywordClass::Pragma | KeywordClass::FeatureName => inline_mode == InlineMode::Meta,
         }

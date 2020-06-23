@@ -49,9 +49,27 @@ impl PartialEq<Symbol> for Path {
     }
 }
 
+impl Path {
+    /// Returns `true` if there is only one segment.
+    pub fn is_segment(&self) -> bool {
+        self.segments.len() == 1
+    }
+
+    /// Returns the only segment if there is only one.
+    pub fn as_segment(&self) -> Option<&PathSegment> {
+        if self.is_segment() {
+            Some(&self.segments[0])
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Eq, Debug)]
 pub struct PathSegment {
     pub symbol: Symbol,
+    /// `Some` if the symbol is a keyword.
+    pub keyword: Option<token::Keyword>,
     pub span: Span,
 }
 
@@ -60,6 +78,7 @@ impl PathSegment {
     pub fn new(interner: &mut Interner, sym: &str, span: Span) -> Self {
         PathSegment {
             symbol: interner.intern(sym),
+            keyword: crate::token::Keyword::identify(sym),
             span,
         }
     }
@@ -268,6 +287,7 @@ pub enum CommandKind {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Stmt {
+    pub span: Span,
     pub pragmas: Vec<Pragma>,
     pub body: StmtBody,
     pub decorator_command: Option<Command>,
@@ -362,6 +382,17 @@ pub struct Block {
     pub stmts: Vec<Stmt>,
 }
 
+impl Block {
+    /// Creates an empty block with a span.
+    pub fn empty(span: Span) -> Self {
+        Block {
+            span,
+            inner_pragmas: Vec::new(),
+            stmts: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Node {
     pub span: Span,
@@ -373,8 +404,9 @@ pub struct Node {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum NodeHeader {
     Title(Path),
-    Tags(Vec<PathSegment>),
-    Custom(PathSegment, Span),
+    Tags(Vec<Path>),
+    /// A custom header entry. The second argument is a span of the header content.
+    Custom(Path, Span),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]

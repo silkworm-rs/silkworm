@@ -95,6 +95,20 @@ where
         self.token.kind == TokenKind::Eof
     }
 
+    /// Returns `true` if `is_eof`, or there is only an `UnIndent` left.
+    fn is_almost_eof(&mut self) -> bool {
+        self.is_eof()
+            || (self.check(TokenKind::UnIndent)
+                && self.check_nth(0, TokenKind::Eof).unwrap_or(true))
+    }
+
+    fn is_end_of_line(&self) -> bool {
+        match self.token.kind {
+            TokenKind::LineBreak | TokenKind::Eof => true,
+            _ => false,
+        }
+    }
+
     /// Checks if the current token matches `kind`. This adds the token to `expected_tokens`
     /// on failure.
     #[must_use]
@@ -140,11 +154,16 @@ where
     /// Eats an `Ident` and interns it, returning the symbol and span. This adds the token
     /// to `expected_tokens` on failure.
     #[must_use]
-    fn eat_symbol(&mut self) -> Option<(Symbol, Span)> {
-        self.eat(TokenKind::Ident).map(|ident| {
-            let sym = self.ctx.intern_span(ident.span);
-            (sym, ident.span)
-        })
+    fn eat_symbol(&mut self) -> Option<(Symbol, Option<crate::token::Keyword>, Span)> {
+        let (ident_span, keyword) = match self.token.kind {
+            TokenKind::Ident => (self.bump().span, None),
+            TokenKind::Keyword(kw) => (self.bump().span, Some(kw)),
+            _ => return None,
+        };
+
+        let symbol = self.ctx.intern_span(ident_span);
+
+        Some((symbol, keyword, ident_span))
     }
 
     /// Eat all tokens until end of line, without consuming the terminating token.
@@ -152,6 +171,22 @@ where
     /// is none.
     fn eat_until_end_of_line(&mut self) -> Option<Span> {
         let (_, span): (Option<()>, _) = self.eat_until_with_or_end_of_line(|_| None);
+        span
+    }
+
+    /// Eat all tokens until the given kind, including line-breaks, without consuming
+    /// the terminating token. Returns the span of all tokens eaten this way, or `None` if there
+    /// is none.
+    fn eat_lines_until(&mut self, kind: TokenKind) -> Option<Span> {
+        let mut span = None;
+
+        while !self.is_eof() && self.token.kind != kind {
+            let span = span.get_or_insert(self.token.span);
+            *span = span.union(self.token.span);
+
+            self.bump();
+        }
+
         span
     }
 
@@ -631,6 +666,21 @@ impl_parse! {
     impl Parse for ast::FlowTarget => parse_flow_target {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::OptionTarget;
+        [ .. ]
+    }
+    impl Parse for ast::Node => parse_node {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Header;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
+        [ .. ]
+    }
+    impl Parse for ast::NodeHeader => parse_node_header {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Header;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::HeaderKey;
+        [ .. ]
+    }
+    impl Parse for ast::File => parse_file {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Header;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
         [ .. ]
     }
 }

@@ -8,20 +8,12 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = Token>,
 {
-    /// Parse a block with a terminator without consuming it.
+    /// Parse a block with a terminator without consuming it. Does not error on EoF.
     pub fn parse_block(&mut self, term: T) -> PResult<'a, ast::Block> {
         let span = self.token.span.empty();
 
-        let mut pragmas = Vec::new();
-        while let Some(style) = self.check_pragma() {
-            if let Ok(pragma) = self.parse_pragma_line() {
-                if style == PragmaStyle::Inner {
-                    pragmas.push(pragma);
-                } else {
-                    break;
-                }
-            }
-        }
+        let (pragmas, pragma_span) = self.parse_inner_pragmas();
+        let span = span.union(pragma_span);
 
         let mut stmts = Vec::new();
         while !self.is_eof() && !self.check(term) {
@@ -32,11 +24,7 @@ where
             }
         }
 
-        if self.is_eof() {
-            self.expect(term);
-        }
-
-        let span = span.union(self.token.span);
+        let span = span.union(self.token.span.empty());
 
         Ok(ast::Block {
             span,
@@ -47,19 +35,7 @@ where
 
     /// Parse a full statement, without consuming the line-break.
     pub fn parse_stmt(&mut self) -> PResult<'a, ast::Stmt> {
-        let mut pragmas = Vec::new();
-        while let Some(style) = self.check_pragma() {
-            if let Ok(pragma) = self.parse_pragma_line() {
-                if style == PragmaStyle::Outer {
-                    pragmas.push(pragma);
-                } else {
-                    self.ctx
-                        .errors
-                        .error("inner pragmas are only allowed at start of blocks")
-                        .span(pragma.span);
-                }
-            }
-        }
+        let (pragmas, span) = self.parse_outer_pragmas();
 
         let body = self.parse_stmt_body()?;
 
@@ -79,7 +55,7 @@ where
             hashtags.extend(self.parse_hashtag().ok());
         }
 
-        if !self.is_eof() && !self.check(T::LineBreak) {
+        if !self.is_end_of_line() {
             let span = self.eat_until_end_of_line();
             self.expect(T::LineBreak)
                 .maybe_annotate_span(span, "extra tokens in statement");
@@ -105,7 +81,10 @@ where
             None
         };
 
+        let span = span.union(self.token.span.empty());
+
         Ok(ast::Stmt {
+            span,
             pragmas,
             body,
             decorator_command,
@@ -475,6 +454,7 @@ mod tests {
                 "    <<call foo()>>\n",
             ),
             |itn| ast::Stmt {
+                span: Span::new(0, 59),
                 pragmas: vec![ast::Pragma::parse_with_interner("//# foo(bar)", 0, itn).unwrap()],
                 body: ast::StmtBody {
                     span: Span::new(13, 7),

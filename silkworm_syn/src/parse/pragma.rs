@@ -40,6 +40,47 @@ where
         })
     }
 
+    /// Parses a list of inner pragmas. Terminates when outer ones are found.
+    pub fn parse_inner_pragmas(&mut self) -> (Vec<ast::Pragma>, Span) {
+        let mut pragmas = Vec::new();
+        let span = self.token.span.empty();
+
+        while let Some(style) = self.check_pragma() {
+            if let Ok(pragma) = self.parse_pragma_line() {
+                if style == Style::Inner {
+                    pragmas.push(pragma);
+                } else {
+                    break;
+                }
+            }
+        }
+
+        let span = span.union(self.token.span.empty());
+        (pragmas, span)
+    }
+
+    /// Parses a list of outer pragmas and errors if inner ones are found.
+    pub fn parse_outer_pragmas(&mut self) -> (Vec<ast::Pragma>, Span) {
+        let mut pragmas = Vec::new();
+        let span = self.token.span.empty();
+
+        while let Some(style) = self.check_pragma() {
+            if let Ok(pragma) = self.parse_pragma_line() {
+                if style == Style::Outer {
+                    pragmas.push(pragma);
+                } else {
+                    self.ctx
+                        .errors
+                        .error("inner pragmas are only allowed at start of blocks and files")
+                        .span(pragma.span);
+                }
+            }
+        }
+
+        let span = span.union(self.token.span.empty());
+        (pragmas, span)
+    }
+
     /// Parse pragma lines consuming the terminator symbol
     pub fn parse_pragma_line(&mut self) -> PResult<'a, ast::Pragma> {
         let pragma = self.parse_pragma();

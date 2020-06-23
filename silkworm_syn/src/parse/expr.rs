@@ -185,13 +185,8 @@ where
             ast::Sigil::Local
         };
 
-        let (ident_span, keyword) = match self.token.kind {
-            T::Ident => (self.bump().span, None),
-            T::Keyword(kw) => (self.bump().span, Some(kw)),
-            _ => return Err(self.expect(T::Ident)),
-        };
-
-        let symbol = self.ctx.intern_span(ident_span);
+        let (symbol, keyword, ident_span) =
+            self.eat_symbol().ok_or_else(|| self.expect(T::Ident))?;
 
         Ok(ast::Var {
             sigil,

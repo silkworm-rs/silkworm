@@ -203,9 +203,25 @@ impl<'a> Cursor<'a> {
         }
 
         if self.inline_mode == M::StartOfLine {
-            if cur == '-' && self.nth_char(0) == '>' {
+            if cur == '-' {
+                match next {
+                    '>' => {
+                        self.bump();
+                        return T::Arrow;
+                    }
+                    '-' if self.nth_char(1) == '-' => {
+                        self.bump();
+                        self.bump();
+                        return T::TripleDash;
+                    }
+                    _ => {}
+                }
+            }
+
+            if cur == '=' && next == '=' && self.nth_char(1) == '=' {
                 self.bump();
-                return T::Arrow;
+                self.bump();
+                return T::TripleEq;
             }
 
             self.inline_mode = match self.block_mode {
