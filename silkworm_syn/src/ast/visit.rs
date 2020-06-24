@@ -554,3 +554,225 @@ pub trait VisitMut {
         }
     }
 }
+
+pub trait Visitable {
+    fn visit_with<'ast, V: Visit<'ast>>(&'ast self, visitor: &mut V);
+    fn visit_mut_with<V: VisitMut>(&mut self, visitor: &mut V);
+}
+
+macro_rules! impl_visitable {
+    {
+        impl Visitable for $ast_type:ident {
+            fn visit_with = $visit_fn:ident;
+            fn visit_mut_with = $visit_mut_fn:ident;
+        }
+    } => {
+        impl Visitable for $ast_type {
+            fn visit_with<'ast, V: Visit<'ast>>(&'ast self, visitor: &mut V) {
+                visitor.$visit_fn(self);
+            }
+            fn visit_mut_with<V: VisitMut>(&mut self, visitor: &mut V) {
+                visitor.$visit_mut_fn(self);
+            }
+        }
+    };
+}
+
+impl_visitable! {
+    impl Visitable for Sigil {
+        fn visit_with = visit_sigil;
+        fn visit_mut_with = visit_sigil_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Symbol {
+        fn visit_with = visit_symbol;
+        fn visit_mut_with = visit_symbol_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Keyword {
+        fn visit_with = visit_keyword;
+        fn visit_mut_with = visit_keyword_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Var {
+        fn visit_with = visit_var;
+        fn visit_mut_with = visit_var_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Path {
+        fn visit_with = visit_path;
+        fn visit_mut_with = visit_path_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for PathSegment {
+        fn visit_with = visit_path_segment;
+        fn visit_mut_with = visit_path_segment_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for LineStmt {
+        fn visit_with = visit_line_stmt;
+        fn visit_mut_with = visit_line_stmt_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for StrBody {
+        fn visit_with = visit_str_body;
+        fn visit_mut_with = visit_str_body_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for StrSegment {
+        fn visit_with = visit_str_segment;
+        fn visit_mut_with = visit_str_segment_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Text {
+        fn visit_with = visit_text;
+        fn visit_mut_with = visit_text_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Escape {
+        fn visit_with = visit_escape;
+        fn visit_mut_with = visit_escape_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for FormatFunc {
+        fn visit_with = visit_format_func;
+        fn visit_mut_with = visit_format_func_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for FormatFuncArg {
+        fn visit_with = visit_format_func_arg;
+        fn visit_mut_with = visit_format_func_arg_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for FormatFuncArgKey {
+        fn visit_with = visit_format_func_arg_key;
+        fn visit_mut_with = visit_format_func_arg_key_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Lit {
+        fn visit_with = visit_lit;
+        fn visit_mut_with = visit_lit_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Expr {
+        fn visit_with = visit_expr;
+        fn visit_mut_with = visit_expr_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Command {
+        fn visit_with = visit_command;
+        fn visit_mut_with = visit_command_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Stmt {
+        fn visit_with = visit_stmt;
+        fn visit_mut_with = visit_stmt_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Pragma {
+        fn visit_with = visit_pragma;
+        fn visit_mut_with = visit_pragma_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Meta {
+        fn visit_with = visit_meta;
+        fn visit_mut_with = visit_meta_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Hashtag {
+        fn visit_with = visit_hashtag;
+        fn visit_mut_with = visit_hashtag_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for StmtBody {
+        fn visit_with = visit_stmt_body;
+        fn visit_mut_with = visit_stmt_body_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for IfStmt {
+        fn visit_with = visit_if_stmt;
+        fn visit_mut_with = visit_if_stmt_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for IfClause {
+        fn visit_with = visit_if_clause;
+        fn visit_mut_with = visit_if_clause_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for ShortcutsStmt {
+        fn visit_with = visit_shortcuts_stmt;
+        fn visit_mut_with = visit_shortcuts_stmt_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for ShortcutOptionClause {
+        fn visit_with = visit_shortcut_option_clause;
+        fn visit_mut_with = visit_shortcut_option_clause_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Block {
+        fn visit_with = visit_block;
+        fn visit_mut_with = visit_block_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Flow {
+        fn visit_with = visit_flow;
+        fn visit_mut_with = visit_flow_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for FlowTarget {
+        fn visit_with = visit_flow_target;
+        fn visit_mut_with = visit_flow_target_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for ShortcutOption {
+        fn visit_with = visit_shortcut_option;
+        fn visit_mut_with = visit_shortcut_option_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for Node {
+        fn visit_with = visit_node;
+        fn visit_mut_with = visit_node_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for NodeHeader {
+        fn visit_with = visit_node_header;
+        fn visit_mut_with = visit_node_header_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for File {
+        fn visit_with = visit_file;
+        fn visit_mut_with = visit_file_mut;
+    }
+}

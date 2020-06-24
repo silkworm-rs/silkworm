@@ -45,6 +45,11 @@ impl Span {
         Span::new(self.base, 0)
     }
 
+    /// Returns an empty span at the end of the current span.
+    pub fn empty_end(self) -> Span {
+        Span::new(self.base + self.len, 0)
+    }
+
     /// Returns the corresponding slice from source.
     ///
     /// # Panics

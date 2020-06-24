@@ -19,5 +19,6 @@ pub mod ast;
 pub mod lex;
 pub mod parse;
 pub mod ptr;
+pub mod refine;
 pub mod symbol;
 pub mod token;

@@ -400,6 +400,10 @@ pub struct IfStmt {
     pub if_clause: IfClause,
     pub else_if_clauses: Vec<IfClause>,
     pub else_block: Option<Block>,
+
+    /// Contains invalid clauses after else, before `endif`. Nested if-statements within are not
+    /// regrouped, and remain raw commands.
+    pub invalid: Option<Block>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -468,6 +472,12 @@ impl Block {
             pragmas: Vec::new(),
             stmts: Vec::new(),
         }
+    }
+
+    /// Pushes a statement to this block, extending the span.
+    pub fn push(&mut self, stmt: Stmt) {
+        self.span = self.span.union(stmt.span);
+        self.stmts.push(stmt);
     }
 }
 
