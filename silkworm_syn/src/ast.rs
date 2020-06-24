@@ -370,8 +370,12 @@ pub enum StmtKind {
     Block(Block),
 
     /// The `if` statement. This is not parsed natively, but generated in the block regrouping
-    /// step.
+    /// transform.
     If(IfStmt),
+
+    /// The "shortcut option group" statement. This is not parsed natively, but generated in
+    /// the block regrouping transform.
+    Shortcuts(ShortcutsStmt),
 }
 
 impl StmtKind {
@@ -379,7 +383,7 @@ impl StmtKind {
     pub(crate) fn may_have_decorators(&self) -> bool {
         match self {
             Self::Text(_) | Self::Command(_) | Self::Flow(_) | Self::ShortcutOption(_) => true,
-            Self::Block(_) | Self::If(_) => false,
+            Self::Block(_) | Self::If(_) | Self::Shortcuts(_) => false,
         }
     }
 }
@@ -402,6 +406,21 @@ pub struct IfStmt {
 pub struct IfClause {
     pub span: Span,
     pub condition: P<Expr>,
+    pub block: Block,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct ShortcutsStmt {
+    pub span: Span,
+    pub options: Vec<ShortcutOptionClause>,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct ShortcutOptionClause {
+    pub span: Span,
+    pub option: ShortcutOption,
+    pub decorator_command: Option<Command>,
+    pub hashtags: Vec<Hashtag>,
     pub block: Block,
 }
 
@@ -437,7 +456,7 @@ pub struct ShortcutOption {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Block {
     pub span: Span,
-    pub inner_pragmas: Vec<Pragma>,
+    pub pragmas: Vec<Pragma>,
     pub stmts: Vec<Stmt>,
 }
 
@@ -446,7 +465,7 @@ impl Block {
     pub fn empty(span: Span) -> Self {
         Block {
             span,
-            inner_pragmas: Vec::new(),
+            pragmas: Vec::new(),
             stmts: Vec::new(),
         }
     }
@@ -455,7 +474,7 @@ impl Block {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Node {
     pub span: Span,
-    pub outer_pragmas: Vec<Pragma>,
+    pub pragmas: Vec<Pragma>,
     pub headers: Vec<NodeHeader>,
     pub body: Block,
 }
@@ -470,7 +489,7 @@ pub enum NodeHeader {
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct File {
-    pub inner_pragmas: Vec<Pragma>,
+    pub pragmas: Vec<Pragma>,
     pub span: Span,
     pub nodes: Vec<Node>,
 }

@@ -163,6 +163,7 @@ pub trait Visit<'ast> {
             }
             StmtKind::Block(block) => self.visit_block(block),
             StmtKind::If(if_stmt) => self.visit_if_stmt(if_stmt),
+            StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt(shortcuts_stmt),
         }
     }
 
@@ -181,8 +182,27 @@ pub trait Visit<'ast> {
         self.visit_block(&if_clause.block);
     }
 
+    fn visit_shortcuts_stmt(&mut self, shortcuts_stmt: &'ast ShortcutsStmt) {
+        for shortcut_option_clause in &shortcuts_stmt.options {
+            self.visit_shortcut_option_clause(shortcut_option_clause);
+        }
+    }
+
+    fn visit_shortcut_option_clause(&mut self, shortcut_option_clause: &'ast ShortcutOptionClause) {
+        self.visit_shortcut_option(&shortcut_option_clause.option);
+        self.visit_block(&shortcut_option_clause.block);
+
+        if let Some(command) = shortcut_option_clause.decorator_command.as_ref() {
+            self.visit_command(command);
+        }
+
+        for hashtag in &shortcut_option_clause.hashtags {
+            self.visit_hashtag(hashtag);
+        }
+    }
+
     fn visit_block(&mut self, block: &'ast Block) {
-        for pragma in &block.inner_pragmas {
+        for pragma in &block.pragmas {
             self.visit_pragma(pragma);
         }
         for stmt in &block.stmts {
@@ -226,7 +246,7 @@ pub trait Visit<'ast> {
     }
 
     fn visit_node(&mut self, node: &'ast Node) {
-        for pragma in &node.outer_pragmas {
+        for pragma in &node.pragmas {
             self.visit_pragma(pragma);
         }
         for node_header in &node.headers {
@@ -248,7 +268,7 @@ pub trait Visit<'ast> {
     }
 
     fn visit_file(&mut self, file: &'ast File) {
-        for pragma in &file.inner_pragmas {
+        for pragma in &file.pragmas {
             self.visit_pragma(pragma);
         }
         for node in &file.nodes {
@@ -418,6 +438,7 @@ pub trait VisitMut {
             }
             StmtKind::Block(block) => self.visit_block_mut(block),
             StmtKind::If(if_stmt) => self.visit_if_stmt_mut(if_stmt),
+            StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt_mut(shortcuts_stmt),
         }
     }
 
@@ -436,8 +457,30 @@ pub trait VisitMut {
         self.visit_block_mut(&mut if_clause.block);
     }
 
+    fn visit_shortcuts_stmt_mut(&mut self, shortcuts_stmt: &mut ShortcutsStmt) {
+        for shortcut_option_clause in &mut shortcuts_stmt.options {
+            self.visit_shortcut_option_clause_mut(shortcut_option_clause);
+        }
+    }
+
+    fn visit_shortcut_option_clause_mut(
+        &mut self,
+        shortcut_option_clause: &mut ShortcutOptionClause,
+    ) {
+        self.visit_shortcut_option_mut(&mut shortcut_option_clause.option);
+        self.visit_block_mut(&mut shortcut_option_clause.block);
+
+        if let Some(command) = shortcut_option_clause.decorator_command.as_mut() {
+            self.visit_command_mut(command);
+        }
+
+        for hashtag in &mut shortcut_option_clause.hashtags {
+            self.visit_hashtag_mut(hashtag);
+        }
+    }
+
     fn visit_block_mut(&mut self, block: &mut Block) {
-        for pragma in &mut block.inner_pragmas {
+        for pragma in &mut block.pragmas {
             self.visit_pragma_mut(pragma);
         }
         for stmt in &mut block.stmts {
@@ -481,7 +524,7 @@ pub trait VisitMut {
     }
 
     fn visit_node_mut(&mut self, node: &mut Node) {
-        for pragma in &mut node.outer_pragmas {
+        for pragma in &mut node.pragmas {
             self.visit_pragma_mut(pragma);
         }
         for node_header in &mut node.headers {
@@ -503,7 +546,7 @@ pub trait VisitMut {
     }
 
     fn visit_file_mut(&mut self, file: &mut File) {
-        for pragma in &mut file.inner_pragmas {
+        for pragma in &mut file.pragmas {
             self.visit_pragma_mut(pragma);
         }
         for node in &mut file.nodes {

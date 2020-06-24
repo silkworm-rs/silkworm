@@ -35,7 +35,7 @@ where
 
         Ok(ast::Block {
             span,
-            inner_pragmas: pragmas,
+            pragmas,
             stmts,
         })
     }
@@ -463,7 +463,7 @@ mod tests {
             ),
             |itn| ast::Block {
                 span: Span::new(0, 64),
-                inner_pragmas: vec![ast::Pragma::parse_with_interner("//#! baz", 0, itn).unwrap()],
+                pragmas: vec![ast::Pragma::parse_with_interner("//#! baz", 0, itn).unwrap()],
                 stmts: vec![
                     ast::Stmt::parse_with_interner(
                         concat!(
@@ -481,7 +481,7 @@ mod tests {
                             span: Span::new(33, 16),
                             kind: ast::StmtKind::Block(ast::Block {
                                 span: Span::new(33, 16),
-                                inner_pragmas: Vec::new(),
+                                pragmas: Vec::new(),
                                 stmts: vec![
                                     ast::Stmt::parse_with_interner("Bar", 33, itn).unwrap(),
                                     ast::Stmt {
@@ -491,7 +491,7 @@ mod tests {
                                             span: Span::new(45, 4),
                                             kind: ast::StmtKind::Block(ast::Block {
                                                 span: Span::new(45, 4),
-                                                inner_pragmas: Vec::new(),
+                                                pragmas: Vec::new(),
                                                 stmts: vec![ast::Stmt::parse_with_interner(
                                                     "Baz", 45, itn,
                                                 )

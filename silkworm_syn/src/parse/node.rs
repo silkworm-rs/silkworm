@@ -42,7 +42,7 @@ where
         let span = span.union(self.token.span.empty());
 
         Ok(ast::File {
-            inner_pragmas: pragmas,
+            pragmas,
             span,
             nodes,
         })
@@ -78,7 +78,7 @@ where
 
         Ok(ast::Node {
             span,
-            outer_pragmas: pragmas,
+            pragmas,
             headers,
             body,
         })
@@ -164,13 +164,13 @@ mod tests {
             ),
             |itn| ast::Node {
                 span: Span::new(0, 30),
-                outer_pragmas: Vec::new(),
+                pragmas: Vec::new(),
                 headers: vec![
                     ast::NodeHeader::parse_with_interner("title: fish.life", 0, itn).unwrap(),
                 ],
                 body: ast::Block {
                     span: Span::new(21, 9),
-                    inner_pragmas: Vec::new(),
+                    pragmas: Vec::new(),
                     stmts: vec![ast::Stmt::parse_with_interner("Foo: bar", 21, itn).unwrap()],
                 },
             },
@@ -192,7 +192,7 @@ mod tests {
                 "wow\n",
             ),
             |itn| ast::File {
-                inner_pragmas: vec![
+                pragmas: vec![
                     ast::Pragma::parse_with_interner("//#! feature(fish)", 0, itn).unwrap(),
                 ],
                 span: Span::new(0, 72),
