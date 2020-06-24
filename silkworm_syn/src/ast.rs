@@ -277,10 +277,18 @@ pub struct Command {
 pub enum CommandKind {
     Set(Var, P<Expr>),
     Call(P<Expr>),
+
+    /// The raw `if` command. This is different from the `If` statement, which is generated
+    /// during block regrouping from raw commands. See the latter for the rationale of doing
+    /// this.
     If(P<Expr>),
+    /// The raw `elseif` command. See also `If`.
     ElseIf(P<Expr>),
+    /// The raw `else` command. See also `If`.
     Else,
+    /// The raw `endif` command. See also `If`.
     EndIf,
+
     Return(Option<P<Expr>>),
     Custom(StrBody),
 }
@@ -343,6 +351,10 @@ pub enum StmtKind {
     Flow(Flow),
     ShortcutOption(ShortcutOption),
     Block(Block),
+
+    /// The `if` statement. This is not parsed natively, but generated in the block regrouping
+    /// step.
+    If(IfStmt),
 }
 
 impl StmtKind {
@@ -350,9 +362,30 @@ impl StmtKind {
     pub(crate) fn may_have_decorators(&self) -> bool {
         match self {
             Self::Text(_) | Self::Command(_) | Self::Flow(_) | Self::ShortcutOption(_) => true,
-            Self::Block(_) => false,
+            Self::Block(_) | Self::If(_) => false,
         }
     }
+}
+
+/// The `if` statement. This is not parsed natively, but generated in the block regrouping
+/// step.
+///
+/// This is different from the raw `if`, `elseif` and `else` commands. Making regrouping a
+/// separate step makes it easier to parse weirdly formatted code, and recover from invalid
+/// ones when there are multiple nodes.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct IfStmt {
+    pub span: Span,
+    pub if_clause: IfClause,
+    pub else_if_clauses: Vec<IfClause>,
+    pub else_block: Option<Block>,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct IfClause {
+    pub span: Span,
+    pub condition: P<Expr>,
+    pub block: Block,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
