@@ -19,6 +19,7 @@ thiserror = "1.0"
 hashbrown = { version = "0.7", features = ["raw"] }
 unicode-xid = "0.2"
 arraydeque = "0.4"
+approx = "0.3"
 
 [dev-dependencies]
 pretty_assertions = "0.6"

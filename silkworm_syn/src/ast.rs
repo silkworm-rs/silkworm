@@ -3,6 +3,8 @@ use crate::symbol::{Interner, Symbol};
 use crate::token;
 use crate::Span;
 
+pub mod visit;
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Sigil {
     /// Global persistent identifier, `$`.
@@ -170,7 +172,7 @@ pub struct FormatFuncArg {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum FormatFuncArgKey {
     Path(Path),
-    Num(Span),
+    Num(Lit),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -260,11 +262,26 @@ pub struct Lit {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum LitKind {
-    Number,
+    /// A literal integer. The field is the parsed value or `None` if unparsable.
+    Int(Option<i64>),
+    /// A literal floating point number. The field is the parsed value or `None` if unparsable.
+    Float(Option<LitFloat>),
     True,
     False,
     Null,
     Str(StrBody),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct LitFloat {
+    pub value: f64,
+}
+
+impl Eq for LitFloat {}
+impl PartialEq for LitFloat {
+    fn eq(&self, other: &Self) -> bool {
+        approx::relative_eq!(self.value, other.value)
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

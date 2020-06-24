@@ -10,6 +10,8 @@
 //! components assume that all sources logically reside in a continuous space that can be
 //! indexed using byte positions.
 
+#![warn(clippy::unimplemented, clippy::print_stdout, clippy::dbg_macro)]
+
 pub use silkworm_err::Error;
 pub use silkworm_sourcemap::Span;
 

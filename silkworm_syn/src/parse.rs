@@ -707,7 +707,7 @@ mod test_utils {
 
     pub fn assert_partial_parse<T, F>(partial: bool, source: &str, expected: F)
     where
-        T: Parse + Eq + fmt::Debug,
+        T: Parse + PartialEq + fmt::Debug,
         F: FnOnce(&mut Interner) -> T,
     {
         assert_partial_parse_with(partial, source, |ast, mut interner| {
@@ -718,7 +718,7 @@ mod test_utils {
 
     pub fn assert_parse<T, F>(source: &str, expected: F)
     where
-        T: Parse + Eq + fmt::Debug,
+        T: Parse + PartialEq + fmt::Debug,
         F: FnOnce(&mut Interner) -> T,
     {
         assert_partial_parse(false, source, expected)

@@ -1,6 +1,6 @@
 use crate::ast;
 use crate::ptr::P;
-use crate::token::{Delim, EscapeChar, Kind as T, Token};
+use crate::token::{Delim, EscapeChar, Kind as T, NumberKind, Token};
 use crate::Span;
 
 use super::list::ListSep;
@@ -254,15 +254,20 @@ where
             |p| {
                 if p.check(T::CloseDelim(Delim::Bracket)) || p.is_end_of_line() {
                     Some(ListSep::Term)
-                } else if p.check(T::Number) || p.check(T::Ident) {
+                } else if p.check(T::Number(NumberKind::DecimalInt)) || p.check(T::Ident) {
                     Some(ListSep::Sep)
                 } else {
                     None
                 }
             },
             |p, span| {
-                p.expect_one_of(&[T::Ident, T::Number, T::CloseDelim(Delim::Bracket)])
-                    .span(span);
+                p.expect_one_of(&[
+                    T::Ident,
+                    T::Number(NumberKind::DecimalInt),
+                    T::Number(NumberKind::DecimalFloat),
+                    T::CloseDelim(Delim::Bracket),
+                ])
+                .span(span);
             },
             |p| p.parse_format_func_arg().ok(),
         );
@@ -296,15 +301,24 @@ where
 
     pub fn parse_format_func_arg_key(&mut self) -> PResult<'a, ast::FormatFuncArgKey> {
         match self.token.kind {
-            T::Number => {
+            T::Number(NumberKind::DecimalInt) => {
                 let token = self.bump();
-                Ok(ast::FormatFuncArgKey::Num(token.span))
+                let value = token.span.read(self.ctx.source, self.ctx.span_base);
+                let value = value
+                    .parse::<i64>()
+                    .map_err(|err| self.ctx.errors.error(err).span(token.span))
+                    .ok();
+
+                Ok(ast::FormatFuncArgKey::Num(ast::Lit {
+                    kind: ast::LitKind::Int(value),
+                    span: token.span,
+                }))
             }
             T::Ident => {
                 let path = self.parse_path()?;
                 Ok(ast::FormatFuncArgKey::Path(path))
             }
-            _ => Err(self.expect_one_of(&[T::Number, T::Ident])),
+            _ => Err(self.expect_one_of(&[T::Number(NumberKind::DecimalInt), T::Ident])),
         }
     }
 }
@@ -398,7 +412,10 @@ mod tests {
                                     .into()),
                             },
                             ast::FormatFuncArg {
-                                key: ast::FormatFuncArgKey::Num(Span::new(36, 2)),
+                                key: ast::FormatFuncArgKey::Num(ast::Lit {
+                                    kind: ast::LitKind::Int(Some(42)),
+                                    span: Span::new(36, 2),
+                                }),
                                 value: P(ast::Lit::parse_with_interner(r#"`baz{$foo}`"#, 39, itn)
                                     .unwrap()
                                     .into()),

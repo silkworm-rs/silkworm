@@ -79,7 +79,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    fn consume_number(&mut self) {
+    fn consume_number(&mut self) -> Kind {
         let mut point_encountered = false;
 
         while {
@@ -92,6 +92,12 @@ impl<'a> Cursor<'a> {
             }
         } {
             self.bump();
+        }
+
+        if point_encountered {
+            Kind::Number(NumberKind::DecimalFloat)
+        } else {
+            Kind::Number(NumberKind::DecimalInt)
         }
     }
 
@@ -405,8 +411,7 @@ impl<'a> Cursor<'a> {
                 }
                 _ => {
                     if cur.is_ascii_digit() {
-                        self.consume_number();
-                        return T::Number;
+                        return self.consume_number();
                     }
 
                     // Keyword or identifier

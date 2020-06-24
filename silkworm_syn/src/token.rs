@@ -436,7 +436,7 @@ pub enum Kind {
 
     /* Literals and text */
     /// Decimal number.
-    Number,
+    Number(NumberKind),
     /// Plain text (dialogue or inside string literals).
     Text,
     /// Single escaped character within text
@@ -453,6 +453,13 @@ pub enum Kind {
     Comment,
     /// Characters that are not understood
     Unknown,
+}
+
+/// Number kind.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub enum NumberKind {
+    DecimalInt,
+    DecimalFloat,
 }
 
 /// A locally spanned token.
@@ -548,7 +555,8 @@ impl fmt::Display for Kind {
             K::Dollar => write!(f, "$"),
             K::At => write!(f, "@"),
             K::AtAt => write!(f, "@@"),
-            K::Number => write!(f, "decimal number"),
+            K::Number(NumberKind::DecimalInt) => write!(f, "integer"),
+            K::Number(NumberKind::DecimalFloat) => write!(f, "float"),
             K::Text => write!(f, "text"),
             K::EscapeChar(_) | K::EscapeByte | K::EscapeUnicode => write!(f, "escape sequence"),
 

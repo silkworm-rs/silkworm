@@ -1,6 +1,6 @@
 use crate::ast;
 use crate::ptr::P;
-use crate::token::{BinOp, Delim, Keyword, Kind as T, Token};
+use crate::token::{BinOp, Delim, Keyword, Kind as T, NumberKind, Token};
 use crate::Span;
 
 use super::{PResult, Parser};
@@ -137,7 +137,7 @@ where
                     Err(self.expect_one_of(&[]))
                 }
             }
-            T::Number
+            T::Number(_)
             | T::Keyword(Keyword::True)
             | T::Keyword(Keyword::False)
             | T::Keyword(Keyword::Null)
@@ -158,7 +158,8 @@ where
             }
             _ => Err(self.expect_one_of(&[
                 T::OpenDelim(Delim::Paren),
-                T::Number,
+                T::Number(NumberKind::DecimalInt),
+                T::Number(NumberKind::DecimalFloat),
                 T::Keyword(Keyword::True),
                 T::Keyword(Keyword::False),
                 T::Keyword(Keyword::Null),
@@ -198,7 +199,27 @@ where
 
     pub fn parse_lit(&mut self) -> PResult<'a, ast::Lit> {
         let (kind, span) = match self.token.kind {
-            T::Number => (ast::LitKind::Number, self.bump().span),
+            T::Number(NumberKind::DecimalInt) => {
+                let span = self.bump().span;
+                let string = span.read(self.ctx.source, self.ctx.span_base);
+                let value = string
+                    .parse::<i64>()
+                    .map_err(|err| self.ctx.errors.error(err).span(span))
+                    .ok();
+
+                (ast::LitKind::Int(value), span)
+            }
+            T::Number(NumberKind::DecimalFloat) => {
+                let span = self.bump().span;
+                let string = span.read(self.ctx.source, self.ctx.span_base);
+                let value = string
+                    .parse::<f64>()
+                    .map_err(|err| self.ctx.errors.error(err).span(span))
+                    .map(|value| ast::LitFloat { value })
+                    .ok();
+
+                (ast::LitKind::Float(value), span)
+            }
             T::Keyword(Keyword::True) => (ast::LitKind::True, self.bump().span),
             T::Keyword(Keyword::False) => (ast::LitKind::False, self.bump().span),
             T::Keyword(Keyword::Null) => (ast::LitKind::Null, self.bump().span),
@@ -217,7 +238,8 @@ where
             }
             _ => {
                 return Err(self.expect_one_of(&[
-                    T::Number,
+                    T::Number(NumberKind::DecimalInt),
+                    T::Number(NumberKind::DecimalFloat),
                     T::Keyword(Keyword::True),
                     T::Keyword(Keyword::False),
                     T::Keyword(Keyword::Null),
@@ -268,7 +290,7 @@ mod tests {
     #[test]
     fn can_parse_lit() {
         assert_parse("123", |_itn| ast::Lit {
-            kind: ast::LitKind::Number,
+            kind: ast::LitKind::Int(Some(123)),
             span: Span::new(0, 3),
         });
 
