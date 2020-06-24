@@ -8,8 +8,13 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = Token>,
 {
+    /// Parse a block until EoF
+    pub fn parse_block(&mut self) -> PResult<'a, ast::Block> {
+        self.parse_block_with_terminator(T::Eof)
+    }
+
     /// Parse a block with a terminator without consuming it. Does not error on EoF.
-    pub fn parse_block(&mut self, term: T) -> PResult<'a, ast::Block> {
+    pub fn parse_block_with_terminator(&mut self, term: T) -> PResult<'a, ast::Block> {
         let span = self.token.span.empty();
 
         let (pragmas, pragma_span) = self.parse_inner_pragmas();
@@ -19,7 +24,9 @@ where
         while !self.is_eof() && !self.check(term) {
             stmts.extend(self.parse_or_eat_till(term, Self::parse_stmt).ok());
 
-            if self.eat(T::LineBreak).is_none() {
+            // UnIndents can be generated consecutively with no line-breaks in between.
+            // Closing multiple blocks at the same time should be possible.
+            if self.last_token.kind != T::UnIndent && self.eat(T::LineBreak).is_none() {
                 self.expect(T::LineBreak);
             }
         }
@@ -38,6 +45,17 @@ where
         let (pragmas, span) = self.parse_outer_pragmas();
 
         let body = self.parse_stmt_body()?;
+        let span = span.union(body.span);
+
+        if !body.kind.may_have_decorators() {
+            return Ok(ast::Stmt {
+                span,
+                pragmas,
+                body,
+                decorator_command: None,
+                hashtags: Vec::new(),
+            });
+        }
 
         let decorator_command = self
             .eat(T::OpenDelim(Delim::DoubleAngleBracket))
@@ -61,26 +79,6 @@ where
                 .maybe_annotate_span(span, "extra tokens in statement");
         }
 
-        let associated_block = if Some(true) == self.check_nth(0, T::Whitespace)
-            && Some(true) == self.check_nth(1, T::Indent)
-        {
-            self.eat(T::LineBreak)
-                .expect("the code above should guarantee a line-break");
-            self.eat(T::Indent)
-                .expect("the code above should guarantee an indent");
-
-            self.parse_block(T::UnIndent).ok().and_then(|block| {
-                if self.eat(T::UnIndent).is_some() {
-                    Some(block)
-                } else {
-                    self.expect(T::UnIndent);
-                    None
-                }
-            })
-        } else {
-            None
-        };
-
         let span = span.union(self.token.span.empty());
 
         Ok(ast::Stmt {
@@ -89,7 +87,6 @@ where
             body,
             decorator_command,
             hashtags,
-            associated_block,
         })
     }
 
@@ -135,7 +132,14 @@ where
                 })
             }
             T::Indent => {
-                let block = self.parse_block(T::UnIndent)?;
+                self.bump();
+
+                let block = self.parse_block_with_terminator(T::UnIndent)?;
+
+                if self.eat(T::UnIndent).is_none() {
+                    self.expect(T::UnIndent);
+                }
+
                 Ok(ast::StmtBody {
                     span: block.span,
                     kind: ast::StmtKind::Block(block),
@@ -446,15 +450,79 @@ mod tests {
     use crate::parse::Parse;
 
     #[test]
+    #[rustfmt::skip::macros(concat)]
+    fn can_parse_block() {
+        assert_parse(
+            concat!(
+                "//#! baz\n",
+                "//# foo(bar)\n",
+                "-> Foo\n",
+                "    Bar\n",
+                "        Baz\n",
+                "<<call foo()>>\n",
+            ),
+            |itn| ast::Block {
+                span: Span::new(0, 64),
+                inner_pragmas: vec![ast::Pragma::parse_with_interner("//#! baz", 0, itn).unwrap()],
+                stmts: vec![
+                    ast::Stmt::parse_with_interner(
+                        concat!(
+                            "//# foo(bar)\n",
+                            "-> Foo",
+                        ),
+                        9,
+                        itn,
+                    )
+                    .unwrap(),
+                    ast::Stmt {
+                        span: Span::new(33, 16),
+                        pragmas: Vec::new(),
+                        body: ast::StmtBody {
+                            span: Span::new(33, 16),
+                            kind: ast::StmtKind::Block(ast::Block {
+                                span: Span::new(33, 16),
+                                inner_pragmas: Vec::new(),
+                                stmts: vec![
+                                    ast::Stmt::parse_with_interner("Bar", 33, itn).unwrap(),
+                                    ast::Stmt {
+                                        span: Span::new(45, 4),
+                                        pragmas: Vec::new(),
+                                        body: ast::StmtBody {
+                                            span: Span::new(45, 4),
+                                            kind: ast::StmtKind::Block(ast::Block {
+                                                span: Span::new(45, 4),
+                                                inner_pragmas: Vec::new(),
+                                                stmts: vec![ast::Stmt::parse_with_interner(
+                                                    "Baz", 45, itn,
+                                                )
+                                                .unwrap()],
+                                            }),
+                                        },
+                                        decorator_command: None,
+                                        hashtags: Vec::new(),
+                                    },
+                                ],
+                            }),
+                        },
+                        decorator_command: None,
+                        hashtags: Vec::new(),
+                    },
+                    ast::Stmt::parse_with_interner("<<call foo()>>", 49, itn).unwrap(),
+                ],
+            },
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip::macros(concat)]
     fn can_parse_stmt() {
         assert_parse(
             concat!(
                 "//# foo(bar)\n",
-                "-> Foo <<if $foo is $bar>>\n",
-                "    <<call foo()>>\n",
+                "-> Foo <<if $foo is $bar>>",
             ),
             |itn| ast::Stmt {
-                span: Span::new(0, 59),
+                span: Span::new(0, 39),
                 pragmas: vec![ast::Pragma::parse_with_interner("//# foo(bar)", 0, itn).unwrap()],
                 body: ast::StmtBody {
                     span: Span::new(13, 7),
@@ -466,11 +534,6 @@ mod tests {
                     ast::Command::parse_with_interner("if $foo is $bar", 22, itn).unwrap(),
                 ),
                 hashtags: Vec::new(),
-                associated_block: Some(ast::Block {
-                    span: Span::new(44, 15),
-                    inner_pragmas: Vec::new(),
-                    stmts: vec![ast::Stmt::parse_with_interner("<<call foo()>>", 44, itn).unwrap()],
-                }),
             },
         );
     }

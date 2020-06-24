@@ -1,3 +1,4 @@
+use arraydeque::ArrayDeque;
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
@@ -9,6 +10,8 @@ mod parse;
 use self::parse::parse_token;
 
 const MODE_STACK_CAPACITY: usize = 256;
+const INDENT_STACK_CAPACITY: usize = 32;
+const DELAY_QUEUE_CAPACITY: usize = 32;
 
 /// Block-level modes used to modify lexer behavior.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -147,6 +150,14 @@ impl KeywordClass {
 pub enum ErrorKind {
     #[error("the inline mode stack is too deep, use less nested expressions")]
     StackTooDeep,
+    #[error("the indentation stack is too deep, use less nested blocks")]
+    IndentStackTooDeep,
+    #[error("the delay queue is too long, this might be a bug")]
+    DelayQueueTooLong,
+
+    #[error("this enum should not be matched exhaustively")]
+    #[doc(hidden)]
+    _NonExhaustive,
 }
 
 /// A spanned fatal lexing error.
@@ -164,22 +175,15 @@ pub struct LexStream<'a> {
     pos: u32,
 
     fatal: bool,
-    eof_emitted: EofState,
+    eof_emitted: bool,
 
     block_mode: BlockMode,
     inline_stack: ArrayVec<[InlineMode; MODE_STACK_CAPACITY]>,
 
-    last_indent: u32,
+    indent_stack: ArrayVec<[u32; INDENT_STACK_CAPACITY]>,
     current_line_indent: u32,
 
-    delayed: Option<Token>,
-}
-
-#[derive(Copy, Clone, Debug)]
-enum EofState {
-    NotEmitted,
-    LastUnIndentEmitted,
-    Emitted,
+    delayed: ArrayDeque<[Token; DELAY_QUEUE_CAPACITY]>,
 }
 
 impl<'a> LexStream<'a> {
@@ -205,15 +209,15 @@ impl<'a> LexStream<'a> {
             pos,
 
             fatal: false,
-            eof_emitted: EofState::NotEmitted,
+            eof_emitted: false,
 
             block_mode,
             inline_stack,
 
-            last_indent: 0,
+            indent_stack: ArrayVec::new(),
             current_line_indent: 0,
 
-            delayed: None,
+            delayed: ArrayDeque::new(),
         }
     }
 
@@ -234,32 +238,54 @@ impl<'a> LexStream<'a> {
             .map_err(|_| ErrorKind::StackTooDeep)
     }
 
-    fn delay_token(&mut self, token: Token, new_kind: token::Kind) -> Token {
-        if let Some(other_delayed) = self.delayed.replace(token) {
-            panic!("already delayed token: {:?}", other_delayed);
-        }
-
-        let mut token = token;
-        token.kind = new_kind;
-        token.span.len = 0;
-
-        token
+    fn delay_token(&mut self, token: Token) -> Result<(), Error> {
+        self.delayed.push_back(token).map_err(|_| Error {
+            kind: ErrorKind::DelayQueueTooLong,
+            token,
+        })
     }
 
-    fn indent_token(&mut self, current_token: Token) -> Option<Token> {
+    fn last_indent(&self) -> u32 {
+        self.indent_stack.last().copied().unwrap_or(0)
+    }
+
+    /// Generate some indent tokens and push them into the delay queue. Returns whether
+    /// any tokens are generated.
+    fn generate_indent_tokens(&mut self, span: Span) -> Result<bool, Error> {
         use std::cmp::Ordering;
 
-        let kind = match self.current_line_indent.cmp(&self.last_indent) {
-            Ordering::Greater => Some(token::Kind::Indent),
-            Ordering::Less => Some(token::Kind::UnIndent),
-            Ordering::Equal => None,
-        };
+        match self.current_line_indent.cmp(&self.last_indent()) {
+            Ordering::Greater => {
+                let indent_token = Token {
+                    span,
+                    kind: token::Kind::Indent,
+                };
 
-        kind.map(|kind| {
-            let token = self.delay_token(current_token, kind);
-            self.last_indent = self.current_line_indent;
-            token
-        })
+                self.indent_stack
+                    .try_push(self.current_line_indent)
+                    .map_err(|_| Error {
+                        kind: ErrorKind::IndentStackTooDeep,
+                        token: indent_token,
+                    })?;
+
+                self.delay_token(indent_token)?;
+
+                Ok(true)
+            }
+            Ordering::Less => {
+                while self.current_line_indent < self.last_indent() {
+                    self.indent_stack.pop();
+
+                    self.delay_token(Token {
+                        span,
+                        kind: token::Kind::UnIndent,
+                    })?;
+                }
+
+                Ok(true)
+            }
+            Ordering::Equal => Ok(false),
+        }
     }
 }
 
@@ -283,21 +309,26 @@ impl<'a> Iterator for LexStream<'a> {
             return None;
         }
 
-        if let Some(delayed) = self.delayed.take() {
+        if let Some(delayed) = self.delayed.pop_front() {
             return Some(Ok(delayed));
         }
 
         if self.src.is_empty() {
-            match self.eof_emitted {
-                EofState::NotEmitted if self.last_indent > 0 => {
-                    self.eof_emitted = EofState::LastUnIndentEmitted;
-                    return Some(Ok(Token::new(T::UnIndent, Span::new(self.pos, 0))));
-                }
-                EofState::NotEmitted | EofState::LastUnIndentEmitted => {
-                    self.eof_emitted = EofState::Emitted;
-                    return Some(Ok(Token::new(T::Eof, Span::new(self.pos, 0))));
-                }
-                EofState::Emitted => return None,
+            if self.indent_stack.pop().is_some() {
+                return Some(Ok(Token {
+                    span: Span::new(self.pos, 0),
+                    kind: token::Kind::UnIndent,
+                }));
+            }
+
+            if self.eof_emitted {
+                return None;
+            } else {
+                self.eof_emitted = true;
+                return Some(Ok(Token {
+                    span: Span::new(self.pos, 0),
+                    kind: token::Kind::Eof,
+                }));
             }
         }
 
@@ -441,14 +472,24 @@ impl<'a> Iterator for LexStream<'a> {
         if inline_mode == InlineMode::StartOfLine {
             if let Some(new_mode) = self.inline_stack.last().copied() {
                 if new_mode != inline_mode {
-                    if let Some(token) = self.indent_token(token) {
-                        return Some(Ok(token));
+                    if let Err(err) = self.generate_indent_tokens(token.span.empty()) {
+                        self.fatal = true;
+                        return Some(Err(err));
                     }
                 }
             }
         }
 
-        Some(Ok(token))
+        if let Some(delayed) = self.delayed.pop_front() {
+            if let Err(err) = self.delay_token(token) {
+                self.fatal = true;
+                Some(Err(err))
+            } else {
+                Some(Ok(delayed))
+            }
+        } else {
+            Some(Ok(token))
+        }
     }
 }
 

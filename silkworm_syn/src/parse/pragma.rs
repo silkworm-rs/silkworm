@@ -45,12 +45,10 @@ where
         let span = self.token.span.empty();
 
         while let Some(style) = self.check_pragma() {
-            if let Ok(pragma) = self.parse_pragma_line() {
-                if style == Style::Inner {
-                    pragmas.push(pragma);
-                } else {
-                    break;
-                }
+            if style == Style::Inner {
+                pragmas.extend(self.parse_pragma_line().ok());
+            } else {
+                break;
             }
         }
 

@@ -623,6 +623,11 @@ impl_parse! {
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::Interpolation;
         [ .. ]
     }
+    impl Parse for ast::Block => parse_block {
+        const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
+        const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;
+        [ .. ]
+    }
     impl Parse for ast::Stmt => parse_stmt {
         const SOURCE_BLOCK_MODE: lex::BlockMode = lex::BlockMode::Body;
         const SOURCE_INLINE_MODE: lex::InlineMode = lex::InlineMode::StartOfLine;

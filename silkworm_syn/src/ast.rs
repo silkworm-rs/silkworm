@@ -292,7 +292,6 @@ pub struct Stmt {
     pub body: StmtBody,
     pub decorator_command: Option<Command>,
     pub hashtags: Vec<Hashtag>,
-    pub associated_block: Option<Block>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -344,6 +343,16 @@ pub enum StmtKind {
     Flow(Flow),
     ShortcutOption(ShortcutOption),
     Block(Block),
+}
+
+impl StmtKind {
+    /// Returns if the statement kind can be decorated.
+    pub(crate) fn may_have_decorators(&self) -> bool {
+        match self {
+            Self::Text(_) | Self::Command(_) | Self::Flow(_) | Self::ShortcutOption(_) => true,
+            Self::Block(_) => false,
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

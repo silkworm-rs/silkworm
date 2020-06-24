@@ -69,7 +69,7 @@ where
             self.expect(T::LineBreak);
         }
 
-        let body = match self.parse_block(T::TripleEq) {
+        let body = match self.parse_block_with_terminator(T::TripleEq) {
             Ok(body) => body,
             Err(_) => ast::Block::empty(span.empty()),
         };
