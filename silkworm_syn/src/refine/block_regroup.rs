@@ -3,10 +3,7 @@ use std::vec;
 use silkworm_err::ErrorCtx;
 
 use crate::ast::visit::VisitMut;
-use crate::ast::{
-    Block, Command, CommandKind, Hashtag, IfClause, IfStmt, Pragma, ShortcutOption,
-    ShortcutOptionClause, ShortcutsStmt, Stmt, StmtBody, StmtKind,
-};
+use crate::ast::*;
 use crate::Span;
 
 /// Block regrouping transform that flattens nested blocks, and creates `if` statements and
@@ -229,16 +226,15 @@ impl<'a> IfGroupState<'a> {
             None
         };
 
-        let invalid = if self.stmt.is_none() || self.stmt_is_end_if() {
-            None
-        } else {
+        if self.stmt.is_some() && !self.stmt_is_end_if() {
             let mut block = Block::empty(all_span.empty_end());
             while self.stmt.is_some() && !self.stmt_is_end_if() {
                 block.push(self.bump().expect("current stmt checked"));
             }
-            all_span = all_span.union(block.span);
-            Some(block)
-        };
+            self.errors
+                .error("invalid if-clauses following else")
+                .span(block.span);
+        }
 
         // end-if command or nothing
         if let Some(end_if_stmt) = self.bump() {
@@ -254,7 +250,6 @@ impl<'a> IfGroupState<'a> {
             if_clause,
             else_if_clauses,
             else_block,
-            invalid,
         };
 
         Stmt {
@@ -315,7 +310,7 @@ impl<'a> OptionGroupIter<'a> {
 struct ShortcutOptionClausePart {
     span: Span,
     option: ShortcutOption,
-    decorator_command: Option<Command>,
+    condition: Option<Box<Expr>>,
     hashtags: Vec<Hashtag>,
     pragmas: Vec<Pragma>,
     block: Option<Block>,
@@ -325,6 +320,8 @@ impl<'a> Iterator for OptionGroupIter<'a> {
     type Item = Stmt;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let errors = self.errors;
+
         while let Some(stmt) = self.iter.peek() {
             // Try building current shortcut group
             if let Some(shortcut_group) = self.shortcut_group.as_mut() {
@@ -346,12 +343,22 @@ impl<'a> Iterator for OptionGroupIter<'a> {
                             unreachable!("pattern checked above");
                         };
 
+                        let condition = stmt.decorator_command.and_then(|command| {
+                            match command.kind {
+                                CommandKind::If(condition) => Some(condition),
+                                _ => {
+                                    errors.error("only if-commands are allowed as decorators for shortcut options").span(command.span);
+                                    None
+                                }
+                            }
+                        });
+
                         shortcut_group.push(ShortcutOptionClausePart {
                             span,
                             option,
                             pragmas: stmt.pragmas,
                             hashtags: stmt.hashtags,
-                            decorator_command: stmt.decorator_command,
+                            condition,
                             block: None,
                         });
                         continue;
@@ -433,12 +440,22 @@ impl<'a> Iterator for OptionGroupIter<'a> {
                         unreachable!("pattern checked above");
                     };
 
+                    let condition = stmt.decorator_command.and_then(|command| {
+                        match command.kind {
+                            CommandKind::If(condition) => Some(condition),
+                            _ => {
+                                self.errors.error("only if-commands are allowed as decorators for shortcut options").span(command.span);
+                                None
+                            }
+                        }
+                    });
+
                     let old = self.shortcut_group.replace(vec![ShortcutOptionClausePart {
                         span,
                         option,
                         pragmas: stmt.pragmas,
                         hashtags: stmt.hashtags,
-                        decorator_command: stmt.decorator_command,
+                        condition,
                         block: None,
                     }]);
 
@@ -483,7 +500,7 @@ fn make_shortcuts_stmt(shortcut_group: Vec<ShortcutOptionClausePart>) -> Shortcu
             ShortcutOptionClause {
                 span,
                 option: part.option,
-                decorator_command: part.decorator_command,
+                condition: part.condition,
                 hashtags: part.hashtags,
                 block,
             }
@@ -609,7 +626,7 @@ mod tests {
                     span: Span::new(0, 0),
                 },
             },
-            decorator_command: None,
+            condition: None,
             hashtags: Vec::new(),
             block,
         }
@@ -673,7 +690,6 @@ mod tests {
                                     },
                                     else_if_clauses: Vec::new(),
                                     else_block: Some(block(vec![])),
-                                    invalid: None,
                                 }))])),
                                 shortcut_option_clause(block(vec![stmt(StmtKind::Shortcuts(
                                     ShortcutsStmt {
@@ -689,7 +705,6 @@ mod tests {
                         }))]),
                     }],
                     else_block: None,
-                    invalid: None,
                 })),
                 stmt(StmtKind::If(IfStmt {
                     span: Span::new(0, 0),
@@ -700,7 +715,6 @@ mod tests {
                     },
                     else_if_clauses: Vec::new(),
                     else_block: Some(block(vec![])),
-                    invalid: None,
                 })),
             ],
         };

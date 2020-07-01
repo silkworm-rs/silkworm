@@ -234,7 +234,7 @@ where
                 self.bump();
                 let body = self.parse_str_body_with_terminator(T::CloseDelim(Delim::Backtick))?;
                 let span = body.span;
-                (ast::LitKind::Str(body), span)
+                (ast::LitKind::InterpolatedStr(body), span)
             }
             _ => {
                 return Err(self.expect_one_of(&[

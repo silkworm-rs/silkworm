@@ -1,3 +1,7 @@
+use std::hash::{Hash, Hasher};
+
+use silkworm_features::Features;
+
 use crate::ptr::P;
 use crate::symbol::{Interner, Symbol};
 use crate::token;
@@ -51,6 +55,12 @@ impl PartialEq<Symbol> for Path {
     }
 }
 
+impl Hash for Path {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.segments.hash(state);
+    }
+}
+
 impl Path {
     /// Returns `true` if there is only one segment.
     pub fn is_segment(&self) -> bool {
@@ -65,6 +75,37 @@ impl Path {
             None
         }
     }
+
+    /// Returns `true` if there is only one segment, and it is the given keyword.
+    pub fn is_keyword(&self, keyword: token::Keyword) -> bool {
+        self.as_keyword().map(|k| k == keyword).unwrap_or(false)
+    }
+
+    /// Returns the only segment as a keyword if there is only one, and it is a keyword.
+    pub fn as_keyword(&self) -> Option<token::Keyword> {
+        self.as_segment().and_then(|seg| seg.keyword)
+    }
+
+    /// Formats the path into a string using the original interner.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `interner` is not the original interner this was created with.
+    pub fn to_string(&self, interner: &Interner) -> String {
+        let mut ret = String::with_capacity(self.span.len as usize);
+        let mut first = true;
+
+        for segment in &self.segments {
+            if !first {
+                ret.push('.');
+            }
+
+            first = false;
+            ret.push_str(interner.read(segment.symbol));
+        }
+
+        ret
+    }
 }
 
 #[derive(Clone, Eq, Debug)]
@@ -77,7 +118,7 @@ pub struct PathSegment {
 
 impl PathSegment {
     /// Convenience constructor for testing.
-    pub fn new(interner: &mut Interner, sym: &str, span: Span) -> Self {
+    pub fn new(interner: &Interner, sym: &str, span: Span) -> Self {
         PathSegment {
             symbol: interner.intern(sym),
             keyword: crate::token::Keyword::identify(sym),
@@ -95,6 +136,12 @@ impl PartialEq for PathSegment {
 impl PartialEq<Symbol> for PathSegment {
     fn eq(&self, other: &Symbol) -> bool {
         &self.symbol == other
+    }
+}
+
+impl Hash for PathSegment {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.symbol.hash(state);
     }
 }
 
@@ -153,6 +200,21 @@ pub enum EscapeKind {
     /// The span here is the span of the actual hex code, since it can be variable length
     /// up to 6 digits.
     Unicode(char, Span),
+}
+
+impl EscapeKind {
+    /// Returns `true` if the escape sequence is an "extended" one as defined in the
+    /// `extended_scape` feature.
+    pub fn is_extended(self) -> bool {
+        use token::EscapeChar as C;
+        use EscapeKind as K;
+
+        match self {
+            K::Char(C::Newline) | K::Char(C::Tab) | K::Char(C::Hashtag) => true,
+            K::Char(_) => false,
+            K::Byte(_) | K::Unicode(_, _) => true,
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -270,6 +332,7 @@ pub enum LitKind {
     False,
     Null,
     Str(StrBody),
+    InterpolatedStr(StrBody),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -400,10 +463,6 @@ pub struct IfStmt {
     pub if_clause: IfClause,
     pub else_if_clauses: Vec<IfClause>,
     pub else_block: Option<Block>,
-
-    /// Contains invalid clauses after else, before `endif`. Nested if-statements within are not
-    /// regrouped, and remain raw commands.
-    pub invalid: Option<Block>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -423,7 +482,7 @@ pub struct ShortcutsStmt {
 pub struct ShortcutOptionClause {
     pub span: Span,
     pub option: ShortcutOption,
-    pub decorator_command: Option<Command>,
+    pub condition: Option<P<Expr>>,
     pub hashtags: Vec<Hashtag>,
     pub block: Block,
 }
@@ -492,7 +551,8 @@ pub struct Node {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum NodeHeader {
     Title(Path),
-    Tags(Vec<Path>),
+    /// Tag list. The second argument is a span of the header content.
+    Tags(Vec<Path>, Span),
     /// A custom header entry. The second argument is a span of the header content.
     Custom(Path, Span),
 }
@@ -502,4 +562,7 @@ pub struct File {
     pub pragmas: Vec<Pragma>,
     pub span: Span,
     pub nodes: Vec<Node>,
+
+    /// File-specific set of feature flags, resolved during refinement.
+    pub features: Option<Features>,
 }

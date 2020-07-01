@@ -1,0 +1,12 @@
+[package]
+name = "silkworm_features"
+version = "0.1.0-dev.1"
+authors = ["The silkworm developers"]
+edition = "2018"
+description = "Internal dependency of silkworm."
+documentation = "https://docs.rs/crate/silkworm_features"
+repository = "https://github.com/silkworm-rs/silkworm"
+license = "MIT"
+
+[badges]
+maintenance = { status = "experimental" }

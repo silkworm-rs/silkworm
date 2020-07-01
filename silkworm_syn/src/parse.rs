@@ -1,7 +1,9 @@
 use std::fmt::{self, Display};
 
 use hashbrown::HashSet;
+
 use silkworm_err::{Error, ErrorBuilder, ErrorCtx};
+use silkworm_features::Features;
 
 use crate::ast;
 use crate::lex::{self, LexStream};
@@ -17,11 +19,12 @@ mod node;
 mod pragma;
 mod str;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ParseCtx<'a> {
     pub errors: &'a ErrorCtx,
-    pub interner: &'a mut Interner,
+    pub interner: &'a Interner,
     pub source: &'a str,
+    pub features: &'a Features,
     pub span_base: u32,
 }
 
@@ -31,7 +34,7 @@ struct Parser<'a, I> {
     last_token: Token,
     expected_tokens: Vec<TokenKind>,
     token_stream: Lookahead<I>,
-    ctx: ParseCtx<'a>,
+    ctx: &'a ParseCtx<'a>,
 }
 
 type PResult<'a, T> = std::result::Result<T, &'a mut ErrorBuilder>;
@@ -40,7 +43,7 @@ impl<'a, I> Parser<'a, I>
 where
     I: Iterator<Item = Token>,
 {
-    fn new(ctx: ParseCtx<'a>, token_stream: I) -> Self {
+    fn new(ctx: &'a ParseCtx<'a>, token_stream: I) -> Self {
         let mut parser = Parser {
             token: Token::new(TokenKind::Unknown, Span::nil()),
             last_token: Token::new(TokenKind::Unknown, Span::nil()),
@@ -251,15 +254,16 @@ where
 
         let ctx = ParseCtx {
             errors,
-            interner: &mut self.ctx.interner,
+            interner: self.ctx.interner,
             source,
             span_base: span.base,
+            features: self.ctx.features,
         };
 
         let lex_stream = lex::LexStream::with_modes(source, span.base, block_mode, inline_mode);
 
         P::parse_with_ctx(
-            ctx,
+            &ctx,
             lex_stream.filter_map(|result| match result {
                 Ok(tok) => Some(tok),
                 Err(err) => {
@@ -338,7 +342,7 @@ impl<'a> Display for TokenChoice<'a> {
 }
 
 impl<'a> ParseCtx<'a> {
-    fn intern_span(&mut self, span: Span) -> Symbol {
+    fn intern_span(&self, span: Span) -> Symbol {
         let sym = span.read(self.source, self.span_base);
         self.interner.intern(sym)
     }
@@ -416,7 +420,7 @@ pub trait Parse: Sized + private::Sealed {
     /// This emits an error if `partial` is `false` and the input is not completely consumed.
     fn partial_parse_with_ctx<I: IntoIterator<Item = Token>>(
         partial: bool,
-        ctx: ParseCtx<'_>,
+        ctx: &ParseCtx<'_>,
         token_stream: I,
     ) -> Result<Self, ()>;
 
@@ -424,7 +428,7 @@ pub trait Parse: Sized + private::Sealed {
     ///
     /// This emits an error if the input is not completely consumed.
     fn parse_with_ctx<I: IntoIterator<Item = Token>>(
-        ctx: ParseCtx<'_>,
+        ctx: &ParseCtx<'_>,
         token_stream: I,
     ) -> Result<Self, ()> {
         Self::partial_parse_with_ctx(false, ctx, token_stream)
@@ -442,7 +446,7 @@ pub trait Parse: Sized + private::Sealed {
         partial: bool,
         source: &str,
         span_base: u32,
-        interner: &mut Interner,
+        interner: &Interner,
     ) -> Result<Self, Vec<Error>> {
         let errors = ErrorCtx::new();
         let lex_stream = LexStream::with_modes(
@@ -454,11 +458,12 @@ pub trait Parse: Sized + private::Sealed {
 
         let ast = Self::partial_parse_with_ctx(
             partial,
-            ParseCtx {
+            &ParseCtx {
                 errors: &errors,
                 interner,
                 source,
                 span_base,
+                features: &Features::default(),
             },
             lex_stream.filter_map(|result| match result {
                 Ok(tok) => Some(tok),
@@ -490,7 +495,7 @@ pub trait Parse: Sized + private::Sealed {
     fn parse_with_interner(
         source: &str,
         span_base: u32,
-        interner: &mut Interner,
+        interner: &Interner,
     ) -> Result<Self, Vec<Error>> {
         Self::partial_parse_with_interner(false, source, span_base, interner)
     }
@@ -510,8 +515,8 @@ pub trait Parse: Sized + private::Sealed {
         source: &str,
         span_base: u32,
     ) -> Result<(Self, Interner), Vec<Error>> {
-        let mut interner = Interner::new();
-        Self::partial_parse_with_interner(partial, source, span_base, &mut interner)
+        let interner = Interner::new();
+        Self::partial_parse_with_interner(partial, source, span_base, &interner)
             .map(|ast| (ast, interner))
     }
 
@@ -547,7 +552,7 @@ macro_rules! impl_parse {
                 const SOURCE_INLINE_MODE: lex::InlineMode = $inline_mode;
                 fn partial_parse_with_ctx<I: IntoIterator<Item = Token>>(
                     partial: bool,
-                    ctx: ParseCtx<'_>,
+                    ctx: &ParseCtx<'_>,
                     token_stream: I,
                 ) -> Result<Self, ()> {
                     let mut parser = Parser::new(ctx, token_stream.into_iter());
@@ -708,10 +713,10 @@ mod test_utils {
     pub fn assert_partial_parse<T, F>(partial: bool, source: &str, expected: F)
     where
         T: Parse + PartialEq + fmt::Debug,
-        F: FnOnce(&mut Interner) -> T,
+        F: FnOnce(&Interner) -> T,
     {
-        assert_partial_parse_with(partial, source, |ast, mut interner| {
-            let expected = expected(&mut interner);
+        assert_partial_parse_with(partial, source, |ast, interner| {
+            let expected = expected(&interner);
             assert_eq!(expected, ast);
         });
     }
@@ -719,7 +724,7 @@ mod test_utils {
     pub fn assert_parse<T, F>(source: &str, expected: F)
     where
         T: Parse + PartialEq + fmt::Debug,
-        F: FnOnce(&mut Interner) -> T,
+        F: FnOnce(&Interner) -> T,
     {
         assert_partial_parse(false, source, expected)
     }

@@ -78,8 +78,16 @@ pub trait Visit<'ast> {
         }
     }
 
-    #[allow(unused_variables)]
-    fn visit_lit(&mut self, lit: &'ast Lit) {}
+    fn visit_lit(&mut self, lit: &'ast Lit) {
+        match &lit.kind {
+            LitKind::Str(body) | LitKind::InterpolatedStr(body) => self.visit_str_body(body),
+            LitKind::Int(..)
+            | LitKind::Float(..)
+            | LitKind::True
+            | LitKind::False
+            | LitKind::Null => {}
+        }
+    }
 
     fn visit_expr(&mut self, expr: &'ast Expr) {
         match &expr.kind {
@@ -192,8 +200,8 @@ pub trait Visit<'ast> {
         self.visit_shortcut_option(&shortcut_option_clause.option);
         self.visit_block(&shortcut_option_clause.block);
 
-        if let Some(command) = shortcut_option_clause.decorator_command.as_ref() {
-            self.visit_command(command);
+        if let Some(expr) = shortcut_option_clause.condition.as_ref() {
+            self.visit_expr(expr);
         }
 
         for hashtag in &shortcut_option_clause.hashtags {
@@ -258,7 +266,7 @@ pub trait Visit<'ast> {
     fn visit_node_header(&mut self, node_header: &'ast NodeHeader) {
         match node_header {
             NodeHeader::Title(path) => self.visit_path(path),
-            NodeHeader::Tags(tags) => {
+            NodeHeader::Tags(tags, _) => {
                 for tag in tags {
                     self.visit_path(tag);
                 }
@@ -353,8 +361,16 @@ pub trait VisitMut {
         }
     }
 
-    #[allow(unused_variables)]
-    fn visit_lit_mut(&mut self, lit: &mut Lit) {}
+    fn visit_lit_mut(&mut self, lit: &mut Lit) {
+        match &mut lit.kind {
+            LitKind::Str(body) | LitKind::InterpolatedStr(body) => self.visit_str_body_mut(body),
+            LitKind::Int(..)
+            | LitKind::Float(..)
+            | LitKind::True
+            | LitKind::False
+            | LitKind::Null => {}
+        }
+    }
 
     fn visit_expr_mut(&mut self, expr: &mut Expr) {
         match &mut expr.kind {
@@ -470,8 +486,8 @@ pub trait VisitMut {
         self.visit_shortcut_option_mut(&mut shortcut_option_clause.option);
         self.visit_block_mut(&mut shortcut_option_clause.block);
 
-        if let Some(command) = shortcut_option_clause.decorator_command.as_mut() {
-            self.visit_command_mut(command);
+        if let Some(expr) = shortcut_option_clause.condition.as_mut() {
+            self.visit_expr_mut(expr);
         }
 
         for hashtag in &mut shortcut_option_clause.hashtags {
@@ -536,7 +552,7 @@ pub trait VisitMut {
     fn visit_node_header_mut(&mut self, node_header: &mut NodeHeader) {
         match node_header {
             NodeHeader::Title(path) => self.visit_path_mut(path),
-            NodeHeader::Tags(tags) => {
+            NodeHeader::Tags(tags, _) => {
                 for tag in tags {
                     self.visit_path_mut(tag);
                 }

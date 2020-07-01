@@ -45,6 +45,7 @@ where
             pragmas,
             span,
             nodes,
+            features: None,
         })
     }
 
@@ -98,15 +99,19 @@ where
             }
             Some(seg) if seg.keyword == Some(K::HeaderKey(H::Tags)) => {
                 let mut tags = Vec::new();
+                let mut span = self.token.span.empty();
                 while !self.is_eof() && self.token.kind != T::LineBreak {
-                    tags.extend(self.parse_path().ok());
+                    if let Ok(path) = self.parse_path() {
+                        span = span.union(path.span);
+                        tags.push(path);
+                    }
                 }
                 if !self.is_end_of_line() {
                     let span = self.eat_until_end_of_line();
                     self.expect(T::LineBreak)
                         .maybe_annotate_span(span, "expected paths as tags");
                 }
-                Ok(ast::NodeHeader::Tags(tags))
+                Ok(ast::NodeHeader::Tags(tags, span))
             }
             _ => {
                 if let Some(span) = self.eat_until_end_of_line() {
@@ -138,11 +143,14 @@ mod tests {
         });
 
         assert_parse("tags: fish.life foo bar.baz", |itn| {
-            ast::NodeHeader::Tags(vec![
-                ast::Path::parse_with_interner("fish.life", 6, itn).unwrap(),
-                ast::Path::parse_with_interner("foo", 16, itn).unwrap(),
-                ast::Path::parse_with_interner("bar.baz", 20, itn).unwrap(),
-            ])
+            ast::NodeHeader::Tags(
+                vec![
+                    ast::Path::parse_with_interner("fish.life", 6, itn).unwrap(),
+                    ast::Path::parse_with_interner("foo", 16, itn).unwrap(),
+                    ast::Path::parse_with_interner("bar.baz", 20, itn).unwrap(),
+                ],
+                Span::new(6, 21),
+            )
         });
 
         assert_parse("custom.header: wow such text", |itn| {
@@ -196,6 +204,7 @@ mod tests {
                     ast::Pragma::parse_with_interner("//#! feature(fish)", 0, itn).unwrap(),
                 ],
                 span: Span::new(0, 72),
+                features: None,
                 nodes: vec![
                     ast::Node::parse_with_interner(
                         concat!(
