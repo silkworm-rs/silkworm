@@ -62,6 +62,14 @@ impl Hash for Path {
 }
 
 impl Path {
+    /// Convenience constructor for single-segment paths for testing.
+    pub fn new(interner: &Interner, sym: &str, span: Span) -> Self {
+        Path {
+            span,
+            segments: vec![PathSegment::new(interner, sym, span)],
+        }
+    }
+
     /// Returns `true` if there is only one segment.
     pub fn is_segment(&self) -> bool {
         self.segments.len() == 1
@@ -155,6 +163,16 @@ pub struct LineStmt {
 pub struct StrBody {
     pub segments: Vec<StrSegment>,
     pub span: Span,
+}
+
+impl StrBody {
+    /// Creates an empty `StrBody` with the given span.
+    pub fn empty(span: Span) -> Self {
+        StrBody {
+            segments: Vec::new(),
+            span,
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -436,9 +454,8 @@ pub enum StmtKind {
     /// transform.
     If(IfStmt),
 
-    /// The "shortcut option group" statement. This is not parsed natively, but generated in
-    /// the block regrouping transform.
-    Shortcuts(ShortcutsStmt),
+    /// The "option group" statement. This is not parsed natively, but generated in refinement.
+    Options(OptionsStmt),
 
     /// The "error" statement kind used to represent errors in the AST
     Err,
@@ -453,7 +470,7 @@ impl StmtKind {
             | Self::Flow(_)
             | Self::ShortcutOption(_)
             | Self::Err => true,
-            Self::Block(_) | Self::If(_) | Self::Shortcuts(_) => false,
+            Self::Block(_) | Self::If(_) | Self::Options(_) => false,
         }
     }
 }
@@ -480,18 +497,33 @@ pub struct IfClause {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ShortcutsStmt {
+pub struct OptionsStmt {
     pub span: Span,
-    pub options: Vec<ShortcutOptionClause>,
+    pub kind: OptionGroupKind,
+    pub options: Vec<OptionClause>,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum OptionGroupKind {
+    Jump,
+    Subroutine,
+    Shortcut,
+    Mixed,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ShortcutOptionClause {
+pub struct OptionClause {
     pub span: Span,
-    pub option: ShortcutOption,
+    pub option: StrBody,
     pub condition: Option<P<Expr>>,
     pub hashtags: Vec<Hashtag>,
-    pub block: Block,
+    pub target: OptionTarget,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum OptionTarget {
+    FlowTarget(FlowTarget),
+    Block(Block),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

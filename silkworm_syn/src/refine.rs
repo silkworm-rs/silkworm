@@ -5,6 +5,7 @@ mod deny_pragmas;
 mod desugar_decorators;
 mod duplicate_headers;
 mod feature_gate;
+mod option_grouping;
 mod report_err;
 mod validate_pragmas;
 
@@ -13,6 +14,7 @@ use deny_pragmas::DenyPragmas;
 use desugar_decorators::DesugarDecorators;
 use duplicate_headers::DuplicateHeaders;
 use feature_gate::FeatureGate;
+use option_grouping::OptionGrouping;
 use report_err::ReportErr;
 use validate_pragmas::ValidatePragmas;
 
@@ -22,6 +24,7 @@ pub fn refine<A: crate::ast::visit::Visitable>(ctx: &ParseCtx<'_>, ast: &mut A) 
         ast.visit_mut_with(&mut DenyPragmas::new(ctx.errors));
     }
     ast.visit_mut_with(&mut BlockRegroup::new(ctx.errors));
+    ast.visit_mut_with(&mut OptionGrouping::new(ctx.errors));
     ast.visit_mut_with(&mut ValidatePragmas::new(ctx.errors, ctx.features));
     ast.visit_mut_with(&mut FeatureGate::new(ctx));
     ast.visit_mut_with(&mut DuplicateHeaders::new(ctx));

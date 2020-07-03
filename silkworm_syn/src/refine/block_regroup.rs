@@ -8,6 +8,9 @@ use crate::Span;
 
 /// Block regrouping transform that flattens nested blocks, and creates `if` statements and
 /// shortcut groups.
+///
+/// Shortcut grouping have to be done here, since otherwise the blocks get flattened. Ordinary
+/// option grouping is done in a separate pass.
 pub struct BlockRegroup<'a> {
     errors: &'a ErrorCtx,
 }
@@ -293,7 +296,7 @@ impl<'a> IfGroupState<'a> {
 struct OptionGroupIter<'a> {
     errors: &'a ErrorCtx,
     iter: FlattenIter,
-    shortcut_group: Option<Vec<ShortcutOptionClausePart>>,
+    shortcut_group: Option<Vec<OptionClausePart>>,
 }
 
 impl<'a> OptionGroupIter<'a> {
@@ -307,7 +310,7 @@ impl<'a> OptionGroupIter<'a> {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-struct ShortcutOptionClausePart {
+struct OptionClausePart {
     span: Span,
     option: ShortcutOption,
     condition: Option<Box<Expr>>,
@@ -353,7 +356,7 @@ impl<'a> Iterator for OptionGroupIter<'a> {
                             }
                         });
 
-                        shortcut_group.push(ShortcutOptionClausePart {
+                        shortcut_group.push(OptionClausePart {
                             span,
                             option,
                             pragmas: stmt.pragmas,
@@ -391,7 +394,7 @@ impl<'a> Iterator for OptionGroupIter<'a> {
                     pragmas: Vec::new(),
                     body: StmtBody {
                         span: shortcuts_stmt.span,
-                        kind: StmtKind::Shortcuts(shortcuts_stmt),
+                        kind: StmtKind::Options(shortcuts_stmt),
                     },
                     decorator_command: None,
                     hashtags: Vec::new(),
@@ -450,7 +453,7 @@ impl<'a> Iterator for OptionGroupIter<'a> {
                         }
                     });
 
-                    let old = self.shortcut_group.replace(vec![ShortcutOptionClausePart {
+                    let old = self.shortcut_group.replace(vec![OptionClausePart {
                         span,
                         option,
                         pragmas: stmt.pragmas,
@@ -474,7 +477,7 @@ impl<'a> Iterator for OptionGroupIter<'a> {
                     pragmas: Vec::new(),
                     body: StmtBody {
                         span: shortcuts_stmt.span,
-                        kind: StmtKind::Shortcuts(shortcuts_stmt),
+                        kind: StmtKind::Options(shortcuts_stmt),
                     },
                     decorator_command: None,
                     hashtags: Vec::new(),
@@ -486,7 +489,7 @@ impl<'a> Iterator for OptionGroupIter<'a> {
     }
 }
 
-fn make_shortcuts_stmt(shortcut_group: Vec<ShortcutOptionClausePart>) -> ShortcutsStmt {
+fn make_shortcuts_stmt(shortcut_group: Vec<OptionClausePart>) -> OptionsStmt {
     let mut stmt_span = None;
 
     let options = shortcut_group
@@ -497,18 +500,19 @@ fn make_shortcuts_stmt(shortcut_group: Vec<ShortcutOptionClausePart>) -> Shortcu
             *stmt_span = stmt_span.union(span);
 
             let block = part.block.unwrap_or_else(|| Block::empty(span));
-            ShortcutOptionClause {
+            OptionClause {
                 span,
-                option: part.option,
+                option: part.option.text,
                 condition: part.condition,
                 hashtags: part.hashtags,
-                block,
+                target: OptionTarget::Block(block),
             }
         })
         .collect::<Vec<_>>();
 
-    ShortcutsStmt {
+    OptionsStmt {
         span: stmt_span.expect("there should be at least one option"),
+        kind: OptionGroupKind::Shortcut,
         options,
     }
 }
@@ -616,19 +620,16 @@ mod tests {
         }))
     }
 
-    fn shortcut_option_clause(block: Block) -> ShortcutOptionClause {
-        ShortcutOptionClause {
+    fn shortcut_option_clause(block: Block) -> OptionClause {
+        OptionClause {
             span: Span::new(0, 0),
-            option: ShortcutOption {
+            option: crate::ast::StrBody {
+                segments: Vec::new(),
                 span: Span::new(0, 0),
-                text: crate::ast::StrBody {
-                    segments: Vec::new(),
-                    span: Span::new(0, 0),
-                },
             },
             condition: None,
             hashtags: Vec::new(),
-            block,
+            target: OptionTarget::Block(block),
         }
     }
 
@@ -678,8 +679,9 @@ mod tests {
                     else_if_clauses: vec![IfClause {
                         span: Span::new(0, 0),
                         condition: expr(),
-                        block: block(vec![stmt(StmtKind::Shortcuts(ShortcutsStmt {
+                        block: block(vec![stmt(StmtKind::Options(OptionsStmt {
                             span: Span::new(0, 0),
+                            kind: OptionGroupKind::Shortcut,
                             options: vec![
                                 shortcut_option_clause(block(vec![stmt(StmtKind::If(IfStmt {
                                     span: Span::new(0, 0),
@@ -691,9 +693,10 @@ mod tests {
                                     else_if_clauses: Vec::new(),
                                     else_block: Some(block(vec![])),
                                 }))])),
-                                shortcut_option_clause(block(vec![stmt(StmtKind::Shortcuts(
-                                    ShortcutsStmt {
+                                shortcut_option_clause(block(vec![stmt(StmtKind::Options(
+                                    OptionsStmt {
                                         span: Span::new(0, 0),
+                                        kind: OptionGroupKind::Shortcut,
                                         options: vec![
                                             shortcut_option_clause(block(vec![])),
                                             shortcut_option_clause(block(vec![])),

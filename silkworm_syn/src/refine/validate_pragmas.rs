@@ -87,9 +87,7 @@ impl<'a> VisitMut for ValidatePragmas<'a> {
                     !args.is_empty()
                 }
                 _ => {
-                    self.errors
-                        .error("unknown pragmas at the top-level")
-                        .span(meta.path.span);
+                    self.errors.warn("unknown pragma").span(meta.path.span);
 
                     false
                 }
@@ -151,9 +149,7 @@ impl<'a> VisitMut for ValidatePragmas<'a> {
                     true
                 }
                 _ => {
-                    self.errors
-                        .error("unknown pragmas at the node-level")
-                        .span(meta.path.span);
+                    self.errors.warn("unknown pragma").span(meta.path.span);
 
                     false
                 }
@@ -170,6 +166,6 @@ impl<'a> VisitMut for ValidatePragmas<'a> {
 
     fn visit_pragma_mut(&mut self, pragma: &mut Pragma) {
         // Only unhandled pragmas will be visited this way
-        self.errors.error("unknown pragma").span(pragma.span);
+        self.errors.warn("unknown pragma").span(pragma.span);
     }
 }

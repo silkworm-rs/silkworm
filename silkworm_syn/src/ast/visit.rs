@@ -171,7 +171,7 @@ pub trait Visit<'ast> {
             }
             StmtKind::Block(block) => self.visit_block(block),
             StmtKind::If(if_stmt) => self.visit_if_stmt(if_stmt),
-            StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt(shortcuts_stmt),
+            StmtKind::Options(options_stmt) => self.visit_options_stmt(options_stmt),
             StmtKind::Err => {}
         }
     }
@@ -191,22 +191,30 @@ pub trait Visit<'ast> {
         self.visit_block(&if_clause.block);
     }
 
-    fn visit_shortcuts_stmt(&mut self, shortcuts_stmt: &'ast ShortcutsStmt) {
-        for shortcut_option_clause in &shortcuts_stmt.options {
-            self.visit_shortcut_option_clause(shortcut_option_clause);
+    fn visit_options_stmt(&mut self, options_stmt: &'ast OptionsStmt) {
+        for option_clause in &options_stmt.options {
+            self.visit_option_clause(option_clause);
         }
     }
 
-    fn visit_shortcut_option_clause(&mut self, shortcut_option_clause: &'ast ShortcutOptionClause) {
-        self.visit_shortcut_option(&shortcut_option_clause.option);
-        self.visit_block(&shortcut_option_clause.block);
+    fn visit_option_clause(&mut self, option_clause: &'ast OptionClause) {
+        self.visit_str_body(&option_clause.option);
 
-        if let Some(expr) = shortcut_option_clause.condition.as_ref() {
+        if let Some(expr) = option_clause.condition.as_ref() {
             self.visit_expr(expr);
         }
 
-        for hashtag in &shortcut_option_clause.hashtags {
+        for hashtag in &option_clause.hashtags {
             self.visit_hashtag(hashtag);
+        }
+
+        self.visit_option_target(&option_clause.target);
+    }
+
+    fn visit_option_target(&mut self, option_target: &'ast OptionTarget) {
+        match option_target {
+            OptionTarget::FlowTarget(flow_target) => self.visit_flow_target(flow_target),
+            OptionTarget::Block(block) => self.visit_block(block),
         }
     }
 
@@ -455,7 +463,7 @@ pub trait VisitMut {
             }
             StmtKind::Block(block) => self.visit_block_mut(block),
             StmtKind::If(if_stmt) => self.visit_if_stmt_mut(if_stmt),
-            StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt_mut(shortcuts_stmt),
+            StmtKind::Options(options_stmt) => self.visit_options_stmt_mut(options_stmt),
             StmtKind::Err => {}
         }
     }
@@ -475,25 +483,30 @@ pub trait VisitMut {
         self.visit_block_mut(&mut if_clause.block);
     }
 
-    fn visit_shortcuts_stmt_mut(&mut self, shortcuts_stmt: &mut ShortcutsStmt) {
-        for shortcut_option_clause in &mut shortcuts_stmt.options {
-            self.visit_shortcut_option_clause_mut(shortcut_option_clause);
+    fn visit_options_stmt_mut(&mut self, options_stmt: &mut OptionsStmt) {
+        for option_clause in &mut options_stmt.options {
+            self.visit_option_clause_mut(option_clause);
         }
     }
 
-    fn visit_shortcut_option_clause_mut(
-        &mut self,
-        shortcut_option_clause: &mut ShortcutOptionClause,
-    ) {
-        self.visit_shortcut_option_mut(&mut shortcut_option_clause.option);
-        self.visit_block_mut(&mut shortcut_option_clause.block);
+    fn visit_option_clause_mut(&mut self, option_clause: &mut OptionClause) {
+        self.visit_str_body_mut(&mut option_clause.option);
 
-        if let Some(expr) = shortcut_option_clause.condition.as_mut() {
+        if let Some(expr) = option_clause.condition.as_mut() {
             self.visit_expr_mut(expr);
         }
 
-        for hashtag in &mut shortcut_option_clause.hashtags {
+        for hashtag in &mut option_clause.hashtags {
             self.visit_hashtag_mut(hashtag);
+        }
+
+        self.visit_option_target_mut(&mut option_clause.target);
+    }
+
+    fn visit_option_target_mut(&mut self, option_target: &mut OptionTarget) {
+        match option_target {
+            OptionTarget::FlowTarget(flow_target) => self.visit_flow_target_mut(flow_target),
+            OptionTarget::Block(block) => self.visit_block_mut(block),
         }
     }
 
@@ -741,15 +754,21 @@ impl_visitable! {
     }
 }
 impl_visitable! {
-    impl Visitable for ShortcutsStmt {
-        fn visit_with = visit_shortcuts_stmt;
-        fn visit_mut_with = visit_shortcuts_stmt_mut;
+    impl Visitable for OptionsStmt {
+        fn visit_with = visit_options_stmt;
+        fn visit_mut_with = visit_options_stmt_mut;
     }
 }
 impl_visitable! {
-    impl Visitable for ShortcutOptionClause {
-        fn visit_with = visit_shortcut_option_clause;
-        fn visit_mut_with = visit_shortcut_option_clause_mut;
+    impl Visitable for OptionClause {
+        fn visit_with = visit_option_clause;
+        fn visit_mut_with = visit_option_clause_mut;
+    }
+}
+impl_visitable! {
+    impl Visitable for OptionTarget {
+        fn visit_with = visit_option_target;
+        fn visit_mut_with = visit_option_target_mut;
     }
 }
 impl_visitable! {

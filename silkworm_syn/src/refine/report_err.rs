@@ -43,7 +43,7 @@ impl<'a, 'ast> Visit<'ast> for ReportErr<'a> {
             StmtKind::Command(command) => self.visit_command(command),
             StmtKind::Flow(flow) => self.visit_flow(flow),
             StmtKind::If(if_stmt) => self.visit_if_stmt(if_stmt),
-            StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt(shortcuts_stmt),
+            StmtKind::Options(options_stmt) => self.visit_options_stmt(options_stmt),
 
             StmtKind::Block(_) => {
                 self.errors
@@ -99,5 +99,15 @@ impl<'a, 'ast> Visit<'ast> for ReportErr<'a> {
         for hashtag in &stmt.hashtags {
             self.visit_hashtag(hashtag);
         }
+    }
+
+    fn visit_flow(&mut self, flow: &'ast Flow) {
+        if flow.option_text.is_some() {
+            self.errors
+                .bug("remaining un-grouped option statement")
+                .span(flow.span);
+        }
+
+        self.visit_flow_target(&flow.target);
     }
 }
