@@ -439,13 +439,20 @@ pub enum StmtKind {
     /// The "shortcut option group" statement. This is not parsed natively, but generated in
     /// the block regrouping transform.
     Shortcuts(ShortcutsStmt),
+
+    /// The "error" statement kind used to represent errors in the AST
+    Err,
 }
 
 impl StmtKind {
     /// Returns if the statement kind can be decorated.
     pub(crate) fn may_have_decorators(&self) -> bool {
         match self {
-            Self::Text(_) | Self::Command(_) | Self::Flow(_) | Self::ShortcutOption(_) => true,
+            Self::Text(_)
+            | Self::Command(_)
+            | Self::Flow(_)
+            | Self::ShortcutOption(_)
+            | Self::Err => true,
             Self::Block(_) | Self::If(_) | Self::Shortcuts(_) => false,
         }
     }

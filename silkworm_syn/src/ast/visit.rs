@@ -172,6 +172,7 @@ pub trait Visit<'ast> {
             StmtKind::Block(block) => self.visit_block(block),
             StmtKind::If(if_stmt) => self.visit_if_stmt(if_stmt),
             StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt(shortcuts_stmt),
+            StmtKind::Err => {}
         }
     }
 
@@ -455,6 +456,7 @@ pub trait VisitMut {
             StmtKind::Block(block) => self.visit_block_mut(block),
             StmtKind::If(if_stmt) => self.visit_if_stmt_mut(if_stmt),
             StmtKind::Shortcuts(shortcuts_stmt) => self.visit_shortcuts_stmt_mut(shortcuts_stmt),
+            StmtKind::Err => {}
         }
     }
 
