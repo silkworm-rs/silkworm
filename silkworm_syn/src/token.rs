@@ -233,6 +233,10 @@ decl_keyword! {
             Break = break,
             /// `in` operator.
             In = in,
+            /// `switch` statement
+            Switch = switch,
+            /// `case` command in `switch` statement
+            Case = case,
         }
 
         pub enum HeaderKey {

@@ -49,6 +49,8 @@ These keywords are not currently used by silkworm, but reserved for forward comp
 - `continue`
 - `break`
 - `in`
+- `switch`
+- `case`
 
 ## Weak keywords
 
